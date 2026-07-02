@@ -1,13 +1,13 @@
-"""Parser MIME: bytes brutos → `ParsedMessage`.
+"""MIME parser: raw bytes → `ParsedMessage`.
 
-Aplica `email.policy.default` (moderno, decodifica RFC 2047) con fallback a
-`compat32` si default falla. Cualquier error individual durante la
-extracción se acumula en `parse_errors` en vez de abortar el parse.
+Applies `email.policy.default` (modern, decodes RFC 2047) with a fallback to
+`compat32` if default fails. Any individual error during extraction is
+accumulated in `parse_errors` rather than aborting the parse.
 
-Política de extracción de cuerpo:
-    - Prefiere `text/plain` para `body_text` (lo que va a FTS5).
-    - Si solo hay `text/html`, lo convierte a texto con `html2text`.
-    - `body_html` siempre captura el HTML original si existe.
+Body extraction policy:
+    - Prefers `text/plain` for `body_text` (what goes into FTS5).
+    - If only `text/html` is present, converts it to text with `html2text`.
+    - `body_html` always captures the original HTML if present.
 """
 
 from __future__ import annotations
@@ -23,17 +23,17 @@ from typing import Optional
 
 import html2text
 
-# Configuración de html2text reutilizable.
+# Reusable html2text configuration.
 _h2t = html2text.HTML2Text()
 _h2t.ignore_links = False
 _h2t.ignore_images = True
-_h2t.body_width = 0   # no envolver líneas
+_h2t.body_width = 0   # don't wrap lines
 
 
 @dataclass
 class Address:
-    name: str           # puede ser vacío
-    addr: str           # normalizado lowercase
+    name: str           # may be empty
+    addr: str           # normalised lowercase
 
     @property
     def display(self) -> str:
@@ -58,14 +58,14 @@ class Attachment:
 @dataclass
 class ParsedMessage:
     message_id: str
-    synthesized_id: bool
+    synthesised_id: bool
     subject: str
     from_: Optional[Address]
     to: list[Address]
     cc: list[Address]
     bcc: list[Address]
     reply_to: list[Address]
-    date_utc: Optional[datetime]      # None si la fecha es inválida o falta
+    date_utc: Optional[datetime]      # None if the date is invalid or missing
     date_original: Optional[str]
     in_reply_to: Optional[str]
     references_chain: Optional[str]
@@ -138,7 +138,7 @@ def _parse_date(value) -> tuple[Optional[datetime], Optional[str]]:
     return dt.astimezone(timezone.utc), original
 
 
-def _synthesize_message_id(raw: bytes, msg: Message) -> str:
+def _synthesise_message_id(raw: bytes, msg: Message) -> str:
     h = hashlib.sha256()
     h.update(_safe_str(msg.get("Date")).encode("utf-8", errors="replace"))
     h.update(_safe_str(msg.get("From")).encode("utf-8", errors="replace"))
@@ -148,7 +148,7 @@ def _synthesize_message_id(raw: bytes, msg: Message) -> str:
 
 
 def _gz_header_block(msg: Message) -> bytes:
-    """Serializa solo los headers (sin cuerpo) y los comprime con gzip."""
+    """Serialises just the headers (no body) and gzip-compresses them."""
     lines: list[str] = []
     for k, v in msg.items():
         lines.append(f"{k}: {_safe_str(v)}")
@@ -156,7 +156,7 @@ def _gz_header_block(msg: Message) -> bytes:
 
 
 def _get_text_payload(part: Message) -> str:
-    """Lee el contenido textual de un part con fallbacks de charset."""
+    """Reads the textual content of a part with charset fallbacks."""
     try:
         return part.get_content()
     except (LookupError, UnicodeDecodeError, AssertionError, ValueError):
@@ -175,19 +175,19 @@ def parse_message(raw: bytes) -> ParsedMessage:
     try:
         msg = message_from_bytes(raw, policy=policy.default)
     except Exception as e:
-        errors.append(f"policy.default falló ({e!r}); fallback a compat32")
+        errors.append(f"policy.default failed ({e!r}); falling back to compat32")
         msg = message_from_bytes(raw, policy=policy.compat32)
 
-    # ----- identificador -----
+    # ----- identifier -----
     raw_msgid = msg.get("Message-ID") or msg.get("Message-Id")
     if raw_msgid:
         message_id = _normalize_msgid(_safe_str(raw_msgid))
-        synthesized = False
+        synthesised = False
     else:
-        message_id = _synthesize_message_id(raw, msg)
-        synthesized = True
+        message_id = _synthesise_message_id(raw, msg)
+        synthesised = True
 
-    # ----- headers básicos -----
+    # ----- basic headers -----
     subject = _safe_str(msg.get("Subject")).strip()
     from_ = _addr_or_none(_safe_str(msg.get("From")))
     to_ = _parse_addr_list(_safe_str(msg.get("To")))
@@ -204,7 +204,7 @@ def parse_message(raw: bytes) -> ParsedMessage:
     else:
         references_chain = None
 
-    # ----- cuerpo -----
+    # ----- body -----
     body_text = ""
     body_html: Optional[str] = None
     body_part = None
@@ -217,7 +217,7 @@ def parse_message(raw: bytes) -> ParsedMessage:
         ct = body_part.get_content_type()
         if ct == "text/plain":
             body_text = _get_text_payload(body_part)
-            # Si además hay HTML, capturamos también para render.
+            # If there's also HTML, capture it too for rendering.
             try:
                 html_part = msg.get_body(preferencelist=("html",))
                 if html_part is not None and html_part is not body_part:
@@ -231,14 +231,14 @@ def parse_message(raw: bytes) -> ParsedMessage:
             except Exception as e:
                 errors.append(f"html2text: {e!r}")
 
-    # ----- adjuntos -----
+    # ----- attachments -----
     attachments: list[Attachment] = []
     try:
         for part in msg.iter_attachments():
             try:
                 content = part.get_payload(decode=True)
             except Exception as e:
-                errors.append(f"adjunto decode: {e!r}")
+                errors.append(f"attachment decode: {e!r}")
                 content = None
             if not content:
                 continue
@@ -258,7 +258,7 @@ def parse_message(raw: bytes) -> ParsedMessage:
 
     return ParsedMessage(
         message_id=message_id,
-        synthesized_id=synthesized,
+        synthesised_id=synthesised,
         subject=subject,
         from_=from_,
         to=to_,

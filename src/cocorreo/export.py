@@ -1,23 +1,23 @@
-"""Reconstrucción de mensajes en formato `.eml` (RFC 5322 + MIME).
+"""Reconstruction of messages in `.eml` format (RFC 5322 + MIME).
 
-Desde lo almacenado en la BD reconstruimos un correo portable que cualquier
-cliente (Thunderbird, Apple Mail, Outlook…) puede abrir:
+From what's stored in the database we reconstruct a portable email that any
+client (Thunderbird, Apple Mail, Outlook…) can open:
 
     multipart/mixed
-    ├── multipart/related      (si hay inline images)
+    ├── multipart/related      (if there are inline images)
     │   ├── multipart/alternative
     │   │   ├── text/plain
     │   │   └── text/html
     │   └── image/png (inline, Content-ID: <…>)
     └── application/pdf (attachment, regular)
 
-Notas:
-- El HTML que devolvemos es el **sanitizado** que sirve el API
-  (bleach quitó scripts/iframes). No reconstruimos el HTML original.
-- Si el `Date:` header se sintetizó porque faltaba, exportamos la fecha
-  en formato RFC 5322 derivada de `date_utc`.
-- `Bcc:` se incluye si la teníamos guardada — lo cual no es habitual en
-  correo recibido pero sí en correo enviado por uno mismo.
+Notes:
+- The HTML we return is the **sanitised** version served by the API
+  (bleach stripped scripts/iframes). We don't reconstruct the original HTML.
+- If the `Date:` header was synthesised because it was missing, we export the
+  date in RFC 5322 format derived from `date_utc`.
+- `Bcc:` is included if we had it stored — not common in received
+  mail, but it is in mail sent by oneself.
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ _BAD_FILENAME_CHARS = '/\\:*?"<>|\r\n\t\0'
 def _fmt_addr(name: str, addr: str) -> str:
     name = (name or "").strip()
     if name:
-        # email.utils.formataddr es lo correcto, pero su quote es estricto.
-        # Esto basta para nuestro export y deja la cabecera legible.
+        # email.utils.formataddr is the "correct" way, but its quoting is strict.
+        # This is good enough for our export and keeps the header readable.
         return f'"{name}" <{addr}>'
     return addr
 
@@ -50,17 +50,17 @@ def _fmt_addrs(rows: list[tuple[str, str]]) -> str:
 
 
 def _safe_filename(subject: Optional[str], message_pk: int) -> str:
-    base = (subject or "mensaje").strip()
+    base = (subject or "message").strip()
     base = "".join("_" if c in _BAD_FILENAME_CHARS else c for c in base)
     base = re.sub(r"\s+", " ", base).strip()
-    base = base[:80] or "mensaje"
+    base = base[:80] or "message"
     return f"{base} - #{message_pk}.eml"
 
 
 def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes, str]:
-    """Reconstruye un mensaje completo como bytes RFC 5322.
+    """Reconstructs a full message as RFC 5322 bytes.
 
-    Devuelve (eml_bytes, filename_sugerido).
+    Returns (eml_bytes, suggested_filename).
     """
     row = conn.execute(
         """
@@ -72,7 +72,7 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
         (message_pk,),
     ).fetchone()
     if not row:
-        raise LookupError(f"mensaje {message_pk} no encontrado")
+        raise LookupError(f"message {message_pk} not found")
 
     (msg_id_str, subject, from_name, from_addr, date_utc, date_original,
      in_reply_to, references_chain, body_text, body_html) = row
@@ -93,8 +93,8 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
         elif kind == "reply-to":
             reply_to.append(pair)
 
-    # Adjuntos: inlines primero para que `add_attachment(inline=…)` lo coloque
-    # dentro del multipart/related junto al HTML.
+    # Attachments: inline ones first so `add_attachment(inline=…)` places them
+    # inside the multipart/related alongside the HTML.
     att_rows = conn.execute(
         """
         SELECT a.sha256, a.mime_type, ma.filename, ma.content_id, ma.inline
@@ -119,7 +119,7 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
         msg["Reply-To"] = _fmt_addrs(reply_to)
     if subject:
         msg["Subject"] = subject
-    # Date: prefer el verbatim original; si no, formato RFC 5322 desde date_utc.
+    # Date: prefer the original verbatim value; otherwise, RFC 5322 format from date_utc.
     if date_original:
         msg["Date"] = date_original
     elif date_utc and not date_utc.startswith("1970-"):
@@ -139,12 +139,12 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
     text_body = body_text or ""
     html_body = body_html or ""
 
-    # Cuerpo: si hay HTML, alternativo; si no, solo texto.
-    msg.set_content(text_body or "(mensaje sin cuerpo de texto)")
+    # Body: alternative if there's HTML, plain text only otherwise.
+    msg.set_content(text_body or "(message has no text body)")
     if html_body:
         msg.add_alternative(html_body, subtype="html")
 
-    # Adjuntos
+    # Attachments
     for sha256, mime_type, filename, content_id, inline in att_rows:
         blob_path = importer.attachment_blob_path(ks.attachments_dir, sha256)
         if not blob_path.is_file():

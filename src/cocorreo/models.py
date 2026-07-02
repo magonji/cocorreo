@@ -1,4 +1,4 @@
-"""Modelos Pydantic v2 para las respuestas del API."""
+"""Pydantic v2 models for the API responses."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ class Address(BaseModel):
 
 
 class AttachmentInfo(BaseModel):
-    id: int                       # id en la tabla `attachments`
+    id: int                       # id in the `attachments` table
     filename: Optional[str] = None
     mime_type: str
     size_bytes: int
@@ -29,7 +29,7 @@ class SourceInfo(BaseModel):
 
 
 class MessageSummary(BaseModel):
-    """Item de listado, con un snippet del cuerpo para preview."""
+    """List item, with a body snippet for preview."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -49,7 +49,7 @@ class MessageDetail(BaseModel):
 
     id: int
     message_id: str
-    synthesized_id: bool = False
+    synthesised_id: bool = False
     subject: str = ""
     from_: Optional[Address] = Field(default=None, alias="from")
     to: list[Address] = Field(default_factory=list)
@@ -61,7 +61,7 @@ class MessageDetail(BaseModel):
     in_reply_to: Optional[str] = None
     references_chain: Optional[str] = None
     body_text: str = ""
-    body_html: Optional[str] = None       # ya sanitizado
+    body_html: Optional[str] = None       # already sanitised
     size_bytes: int = 0
     has_html: bool = False
     has_attachments: bool = False
@@ -75,25 +75,25 @@ class MessageListResponse(BaseModel):
 
 
 class ThreadResponse(BaseModel):
-    """Conversación completa: mensajes alcanzables vía In-Reply-To desde el dado."""
+    """Full conversation: messages reachable via In-Reply-To from the given one."""
 
-    root_id: int                  # id del mensaje raíz (más antiguo del hilo)
-    items: list[MessageSummary]   # ordenados por fecha asc
+    root_id: int                  # id of the root message (oldest in the thread)
+    items: list[MessageSummary]   # ordered by date ascending
 
 
 class ImageItem(BaseModel):
-    """Una imagen adjunta única (deduplicada por SHA-256) con su mensaje contexto."""
+    """A single attached image (deduplicated by SHA-256) with its message context."""
 
-    attachment_id: int            # id en la tabla `attachments`
-    message_id: int               # mensaje más reciente donde aparece (para el clic)
+    attachment_id: int            # id in the `attachments` table
+    message_id: int               # most recent message where it appears (for click-through)
     filename: Optional[str] = None
     mime_type: str
     size_bytes: int
-    date_utc: str                 # fecha del mensaje más reciente que la contiene
+    date_utc: str                 # date of the most recent message containing it
     subject: str = ""
     from_addr: Optional[str] = None
     inline: bool = False
-    appearances: int = 1          # nº de mensajes donde aparece esta misma imagen
+    appearances: int = 1          # number of messages where this same image appears
 
 
 class ImageListResponse(BaseModel):
@@ -134,14 +134,14 @@ class HourStat(BaseModel):
 
 
 class WeekdayStat(BaseModel):
-    weekday: int     # 0=lunes ... 6=domingo (ISO)
+    weekday: int     # 0=Monday ... 6=Sunday (ISO)
     count: int
 
 
 class AccountStat(BaseModel):
     account: str
     section: str     # 'IMAP' | 'Local'
-    count: int       # mensajes únicos asociados a esta cuenta
+    count: int       # unique messages associated with this account
 
 
 class SenderStat(BaseModel):

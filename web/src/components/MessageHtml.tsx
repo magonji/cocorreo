@@ -28,20 +28,20 @@ export function MessageHtml({ message, html }: Props) {
             >
               {loadRemote ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
               {loadRemote
-                ? `Ocultar imágenes remotas (${prepared.remoteImageCount})`
-                : `Cargar ${prepared.remoteImageCount} imágen${prepared.remoteImageCount !== 1 ? "es" : ""} remota${prepared.remoteImageCount !== 1 ? "s" : ""}`}
+                ? `Hide remote images (${prepared.remoteImageCount})`
+                : `Load ${prepared.remoteImageCount} remote image${prepared.remoteImageCount !== 1 ? "s" : ""}`}
             </button>
           )}
           {prepared.missingCidCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <AlertTriangle className="h-3 w-3 text-yellow-500" />
-              {prepared.missingCidCount} referencias inline rotas
+              {prepared.missingCidCount} broken inline references
             </span>
           )}
         </div>
       )}
       <iframe
-        title={`Mensaje #${message.id} (HTML)`}
+        title={`Message #${message.id} (HTML)`}
         srcDoc={prepared.html}
         sandbox="allow-popups allow-popups-to-escape-sandbox"
         className="flex-1 w-full border-0 bg-white"

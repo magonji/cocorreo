@@ -51,7 +51,7 @@ export function FolderList({ selected, onSelect }: Props) {
   }, []);
 
   if (error) return <p className="p-4 text-xs text-destructive">{error}</p>;
-  if (!groups) return <p className="p-4 text-xs text-muted-foreground">cargando…</p>;
+  if (!groups) return <p className="p-4 text-xs text-muted-foreground">loading…</p>;
 
   return (
     <nav className="py-2">
@@ -64,7 +64,7 @@ export function FolderList({ selected, onSelect }: Props) {
         )}
       >
         <Inbox className="h-4 w-4 text-muted-foreground" />
-        <span className="flex-1">Todos los mensajes</span>
+        <span className="flex-1">All messages</span>
       </button>
 
       <div className="my-2 border-t border-border" />
@@ -74,11 +74,11 @@ export function FolderList({ selected, onSelect }: Props) {
           <div className="flex items-center gap-2 px-3 py-1 text-xs uppercase tracking-wider text-muted-foreground">
             {g.section === "IMAP" ? <Cloud className="h-3 w-3" /> : <HardDrive className="h-3 w-3" />}
             <span className="flex-1 truncate" title={g.account}>{g.account}</span>
-            <span>{g.total.toLocaleString("es-ES")}</span>
+            <span>{g.total.toLocaleString("en-GB")}</span>
           </div>
           {g.folders.map((f) => {
             const isSelected = selected?.folder === f.folder_display;
-            // Mostrar el último segmento de la carpeta como nombre legible.
+            // Show the last segment of the folder path as a readable name.
             const shortName = f.folder_display.split("/").slice(-1)[0] || f.folder_display;
             return (
               <button
@@ -97,7 +97,7 @@ export function FolderList({ selected, onSelect }: Props) {
               >
                 <span className="flex-1 truncate">{shortName}</span>
                 <span className="text-muted-foreground tabular-nums">
-                  {f.message_count.toLocaleString("es-ES")}
+                  {f.message_count.toLocaleString("en-GB")}
                 </span>
               </button>
             );

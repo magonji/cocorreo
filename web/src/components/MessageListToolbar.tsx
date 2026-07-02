@@ -43,7 +43,7 @@ export function MessageListToolbar({
             type="search"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Buscar — texto, from:, after:, has:attachment, subject:, …"
+            placeholder="Search — text, from:, after:, has:attachment, subject:, …"
             className={cn(
               "h-8 w-full rounded border border-border bg-secondary/30 pl-8 pr-7 text-xs",
               "outline-none placeholder:text-muted-foreground/70",
@@ -55,7 +55,7 @@ export function MessageListToolbar({
               type="button"
               onClick={() => onQueryChange("")}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent"
-              title="Limpiar búsqueda"
+              title="Clear search"
             >
               <X className="h-3 w-3" />
             </button>
@@ -68,7 +68,7 @@ export function MessageListToolbar({
             "inline-flex h-8 items-center gap-1.5 rounded border border-border px-2 text-xs",
             (open || active > 0) && "bg-accent",
           )}
-          title="Filtros"
+          title="Filters"
         >
           <SlidersHorizontal className="h-3 w-3" />
           {active > 0 && <span className="rounded bg-primary/80 px-1 text-[10px] text-primary-foreground">{active}</span>}
@@ -80,7 +80,7 @@ export function MessageListToolbar({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
-                Desde
+                From
               </label>
               <input
                 type="date"
@@ -91,7 +91,7 @@ export function MessageListToolbar({
             </div>
             <div>
               <label className="mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
-                Hasta
+                To
               </label>
               <input
                 type="date"
@@ -103,12 +103,12 @@ export function MessageListToolbar({
           </div>
           <div>
             <label className="mb-0.5 block text-[10px] uppercase tracking-wider text-muted-foreground">
-              Remitente exacto
+              Exact sender
             </label>
             <input
               type="email"
               value={filters.from ?? ""}
-              placeholder="ejemplo@dominio.com"
+              placeholder="example@domain.com"
               onChange={(e) => onFiltersChange({ ...filters, from: e.target.value || undefined })}
               className="h-7 w-full rounded border border-border bg-secondary/30 px-2 text-xs outline-none focus:border-ring"
             />
@@ -124,7 +124,7 @@ export function MessageListToolbar({
                 })}
                 className="h-3.5 w-3.5 accent-primary"
               />
-              <span>Solo con adjuntos</span>
+              <span>Attachments only</span>
             </label>
             {active > 0 && (
               <button
@@ -132,21 +132,21 @@ export function MessageListToolbar({
                 onClick={() => onFiltersChange({})}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Limpiar filtros
+                Clear filters
               </button>
             )}
           </div>
 
           <details className="pt-1">
             <summary className="cursor-pointer text-[10px] uppercase tracking-wider text-muted-foreground">
-              Sintaxis del buscador
+              Search syntax
             </summary>
             <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
-              <div><code className="rounded bg-secondary/60 px-1">from:foo@x.com</code> filtra remitente exacto</div>
+              <div><code className="rounded bg-secondary/60 px-1">from:foo@x.com</code> filters exact sender</div>
               <div><code className="rounded bg-secondary/60 px-1">after:2020-01-01</code> · <code className="rounded bg-secondary/60 px-1">before:2023-12-31</code></div>
               <div><code className="rounded bg-secondary/60 px-1">has:attachment</code> · <code className="rounded bg-secondary/60 px-1">account:imap.gmail-3.com</code></div>
-              <div><code className="rounded bg-secondary/60 px-1">subject:reunión</code> · <code className="rounded bg-secondary/60 px-1">body:contrato</code> · <code className="rounded bg-secondary/60 px-1">to:klaas</code></div>
-              <div><code className="rounded bg-secondary/60 px-1">"frase exacta"</code> · combina todos: <code className="rounded bg-secondary/60 px-1">from:klaas after:2020 has:attachment ftir</code></div>
+              <div><code className="rounded bg-secondary/60 px-1">subject:meeting</code> · <code className="rounded bg-secondary/60 px-1">body:contract</code> · <code className="rounded bg-secondary/60 px-1">to:klaas</code></div>
+              <div><code className="rounded bg-secondary/60 px-1">"exact phrase"</code> · combine them all: <code className="rounded bg-secondary/60 px-1">from:klaas after:2020 has:attachment ftir</code></div>
             </div>
           </details>
         </div>
@@ -155,7 +155,7 @@ export function MessageListToolbar({
       <div className="flex items-center justify-between border-t border-border px-4 py-1.5">
         <h2 className="truncate text-sm font-medium">{title}</h2>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {count.toLocaleString("es-ES")}{hasMore ? "+" : ""}
+          {count.toLocaleString("en-GB")}{hasMore ? "+" : ""}
         </span>
       </div>
     </div>

@@ -12,7 +12,7 @@ dependencies = [
     "html2text>=2025.4.15",
     "rich>=15.0.0",
     "typer>=0.25.1",
-    "sqlcipher3-binary>=0.6.0; sys_platform == 'linux'",
+    "sqlcipher3>=0.6.2; sys_platform == 'linux'",
     "fastapi>=0.136.1",
     "uvicorn[standard]>=0.47.0",
     "bleach>=6.3.0",

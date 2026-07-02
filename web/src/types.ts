@@ -1,4 +1,4 @@
-// Tipos espejo de los modelos Pydantic del backend.
+// Mirror types of the backend's Pydantic models.
 
 export interface Address {
   name: string;
@@ -36,7 +36,7 @@ export interface MessageSummary {
 export interface MessageDetail {
   id: number;
   message_id: string;
-  synthesized_id: boolean;
+  synthesised_id: boolean;
   subject: string;
   from: Address | null;
   to: Address[];

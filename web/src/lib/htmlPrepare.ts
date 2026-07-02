@@ -1,16 +1,16 @@
 import type { MessageDetail } from "@/types";
 
 /**
- * Resultado del pre-procesado de HTML para renderizar de forma segura
- * en un iframe sandbox.
+ * Result of pre-processing HTML so it can be safely rendered
+ * inside a sandboxed iframe.
  *
- * Transformaciones aplicadas:
- *  - `cid:X` en `<img src>` → URL del adjunto inline correspondiente.
- *  - `<img>` con src remoto se neutraliza cuando `loadRemoteImages` es false;
- *    el `src` original se preserva en `data-cocorreo-blocked` para reactivarlo.
- *  - Todos los `<a>` reciben `target="_blank" rel="noopener noreferrer"` para
- *    que el iframe sandboxed pueda abrirlos.
- *  - Se inyecta una hoja de estilos base de lectura.
+ * Transformations applied:
+ *  - `cid:X` in `<img src>` → URL of the corresponding inline attachment.
+ *  - `<img>` with a remote src is neutralised when `loadRemoteImages` is false;
+ *    the original `src` is preserved in `data-cocorreo-blocked` so it can be reactivated.
+ *  - All `<a>` tags get `target="_blank" rel="noopener noreferrer"` so
+ *    the sandboxed iframe can open them.
+ *  - A base reading stylesheet is injected.
  */
 export interface PreparedHtml {
   html: string;
@@ -51,7 +51,7 @@ export function prepareHtml(
 ): PreparedHtml {
   const doc = new DOMParser().parseFromString(html, "text/html");
 
-  // Mapa content_id → attachment_id para resolver `cid:`.
+  // Map content_id → attachment_id to resolve `cid:`.
   const cidMap = new Map<string, number>();
   for (const a of message.attachments) {
     if (a.content_id) cidMap.set(a.content_id, a.id);
@@ -71,7 +71,7 @@ export function prepareHtml(
         missingCidCount++;
         img.removeAttribute("src");
         if (!img.getAttribute("alt")) {
-          img.setAttribute("alt", `(imagen inline no resuelta: ${cid})`);
+          img.setAttribute("alt", `(unresolved inline image: ${cid})`);
         }
         img.classList.add("cocorreo-blocked-image");
       }
@@ -81,20 +81,20 @@ export function prepareHtml(
         img.setAttribute("data-cocorreo-blocked", src);
         img.removeAttribute("src");
         if (!img.getAttribute("alt")) {
-          img.setAttribute("alt", "(imagen remota bloqueada)");
+          img.setAttribute("alt", "(remote image blocked)");
         }
         img.classList.add("cocorreo-blocked-image");
       }
     }
   });
 
-  // Enlaces salen en nueva pestaña (necesario en iframe sandbox).
+  // Links open in a new tab (needed inside the sandboxed iframe).
   doc.querySelectorAll("a[href]").forEach((a) => {
     a.setAttribute("target", "_blank");
     a.setAttribute("rel", "noopener noreferrer");
   });
 
-  // Inyectar nuestros estilos base sin pisar los del email.
+  // Inject our base styles without overriding the email's own.
   let head = doc.querySelector("head");
   if (!head) {
     head = doc.createElement("head");

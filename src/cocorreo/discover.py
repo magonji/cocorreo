@@ -1,9 +1,9 @@
-"""Fase 1 — Descubrimiento.
+"""Phase 1 — Discovery.
 
-Recorre un perfil de Thunderbird, identifica los archivos mbox dentro de
-`Mail/` y `ImapMail/`, cuenta mensajes en modo streaming y produce un
-resumen por cuenta + un JSON detallado opcional. No escribe nada en los
-datos originales (lectura pura).
+Walks a Thunderbird profile, identifies the mbox files within
+`Mail/` and `ImapMail/`, counts messages in streaming mode and produces a
+per-account summary plus an optional detailed JSON report. Writes nothing to
+the original data (read-only).
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ from rich.progress import (
 )
 from rich.table import Table
 
-# Extensiones que nunca son mbox: índices Thunderbird, metadata varia, BDs auxiliares.
+# Extensions that are never mbox: Thunderbird indexes, misc metadata, auxiliary DBs.
 SKIP_SUFFIXES = {
     ".msf", ".dat", ".html", ".bak", ".json", ".sqlite", ".mab",
     ".sqlite-shm", ".sqlite-wal", ".db", ".ini", ".txt", ".log",
 }
 
-# Nombres exactos a saltar dentro de los árboles de correo.
+# Exact names to skip within the mail trees.
 SKIP_NAMES = {
     "filterlog.html", "msgFilterRules.dat", ".parentlock", ".DS_Store",
 }
@@ -43,9 +43,9 @@ HEADER_RE = re.compile(rb"^(From|To|Subject|Date|Message-ID|Received):", re.IGNO
 
 
 def decode_imap_utf7(s: str) -> str:
-    """Decodifica el UTF-7 modificado que Thunderbird usa en nombres IMAP.
+    """Decodes the modified UTF-7 that Thunderbird uses in IMAP folder names.
 
-    Ejemplos:
+    Examples:
         'Educaci&APM-n'  -> 'Educación'
         'Boletines &- newsletters' -> 'Boletines & newsletters'
     """
@@ -80,8 +80,8 @@ class MboxInfo:
     path: str
     rel_path: str
     account: str
-    section: str           # "Local" o "IMAP"
-    display_path: str      # ruta relativa con nombres decodificados
+    section: str           # "Local" or "IMAP"
+    display_path: str      # relative path with decoded names
     size_bytes: int
     mtime: str
     message_count: int
@@ -90,7 +90,7 @@ class MboxInfo:
 
 
 def is_mbox_candidate(p: Path) -> bool:
-    """Heurística: archivos sin extensión y no marcados como metadatos."""
+    """Heuristic: files with no extension that aren't flagged as metadata."""
     name = p.name
     if name in SKIP_NAMES:
         return False
@@ -106,7 +106,7 @@ def is_mbox_candidate(p: Path) -> bool:
 
 
 def _walk(account_dir: Path) -> Iterator[Path]:
-    """Recorre recursivamente un árbol de cuenta, entrando en .sbd y subcarpetas."""
+    """Recursively walks an account tree, descending into .sbd and subfolders."""
     try:
         children = sorted(account_dir.iterdir())
     except (PermissionError, OSError):
@@ -119,7 +119,7 @@ def _walk(account_dir: Path) -> Iterator[Path]:
 
 
 def iter_mbox_candidates(root: Path) -> Iterator[tuple[Path, str, str]]:
-    """Genera (path, cuenta, sección) para cada candidato mbox bajo Mail/ e ImapMail/."""
+    """Yields (path, account, section) for each mbox candidate under Mail/ and ImapMail/."""
     for section_dirname, section_label in (("Mail", "Local"), ("ImapMail", "IMAP")):
         section_root = root / section_dirname
         if not section_root.is_dir():
@@ -137,7 +137,7 @@ def count_messages(
     progress: Optional[Progress] = None,
     task_id=None,
 ) -> tuple[int, bool, list[str]]:
-    """Cuenta líneas que empiezan por 'From ' (separador mbox-O). Streaming, RAM constante."""
+    """Counts lines starting with 'From ' (mbox-O separator). Streaming, constant RAM."""
     warnings: list[str] = []
     size = path.stat().st_size
     if size == 0:
@@ -149,10 +149,10 @@ def count_messages(
         first = f.read(512)
         if not first.startswith(FROM_PREFIX):
             if HEADER_RE.search(first):
-                warnings.append("no empieza por 'From ' pero contiene headers de email")
+                warnings.append("doesn't start with 'From ' but contains email headers")
                 valid = False
             else:
-                warnings.append("no parece un mbox: sin separador 'From ' ni headers reconocibles")
+                warnings.append("doesn't look like an mbox: no 'From ' separator or recognisable headers")
                 return 0, False, warnings
         f.seek(0)
 
@@ -182,15 +182,15 @@ def human_bytes(n: float) -> str:
 def discover(root: Path, output_json: Optional[Path] = None) -> dict:
     console = Console()
     if not (root / "Mail").exists() and not (root / "ImapMail").exists():
-        console.print(f"[red]No se encontró Mail/ ni ImapMail/ en {root}[/red]")
+        console.print(f"[red]Neither Mail/ nor ImapMail/ found in {root}[/red]")
         raise SystemExit(2)
 
-    console.print(f"[cyan]Escaneando perfil:[/cyan] {root}")
+    console.print(f"[cyan]Scanning profile:[/cyan] {root}")
     candidates = list(iter_mbox_candidates(root))
     total_bytes = sum(p.stat().st_size for p, _, _ in candidates)
     console.print(
-        f"Encontrados [bold]{len(candidates)}[/bold] archivos candidatos, "
-        f"[bold]{human_bytes(total_bytes)}[/bold] totales\n"
+        f"Found [bold]{len(candidates)}[/bold] candidate files, "
+        f"[bold]{human_bytes(total_bytes)}[/bold] total\n"
     )
 
     results: list[MboxInfo] = []
@@ -205,7 +205,7 @@ def discover(root: Path, output_json: Optional[Path] = None) -> dict:
         console=console,
         transient=True,
     ) as progress:
-        outer = progress.add_task("Procesando", total=len(candidates), name="")
+        outer = progress.add_task("Processing", total=len(candidates), name="")
         for path, account, section in candidates:
             stat = path.stat()
             display_parts = [decode_imap_utf7(part) for part in path.relative_to(root).parts]
@@ -215,10 +215,10 @@ def discover(root: Path, output_json: Optional[Path] = None) -> dict:
             size = stat.st_size
             warnings: list[str] = []
             if size > 500 * 1024 * 1024:
-                warnings.append(f"archivo muy grande ({human_bytes(size)})")
+                warnings.append(f"very large file ({human_bytes(size)})")
 
             if size > 100 * 1024 * 1024:
-                inner = progress.add_task("  ↳ contando", total=size, name=path.name)
+                inner = progress.add_task("  ↳ counting", total=size, name=path.name)
                 count, valid, w = count_messages(path, progress, inner)
                 progress.remove_task(inner)
             else:
@@ -254,7 +254,7 @@ def discover(root: Path, output_json: Optional[Path] = None) -> dict:
             "files": [asdict(r) for r in results],
         }
         output_json.write_text(json.dumps(report, ensure_ascii=False, indent=2))
-        console.print(f"\n[green]Reporte JSON escrito en[/green] {output_json}")
+        console.print(f"\n[green]JSON report written to[/green] {output_json}")
 
     return {
         "files": results,
@@ -272,12 +272,12 @@ def _print_summary(results: list[MboxInfo], console: Console) -> None:
         agg["messages"] += r.message_count
         agg["bytes"] += r.size_bytes
 
-    table = Table(title="Resumen por cuenta", header_style="bold cyan")
-    table.add_column("Sección")
-    table.add_column("Cuenta / Categoría")
-    table.add_column("Archivos", justify="right")
-    table.add_column("Mensajes", justify="right")
-    table.add_column("Tamaño", justify="right")
+    table = Table(title="Summary by account", header_style="bold cyan")
+    table.add_column("Section")
+    table.add_column("Account / Category")
+    table.add_column("Files", justify="right")
+    table.add_column("Messages", justify="right")
+    table.add_column("Size", justify="right")
     for (section, account), agg in sorted(accounts.items()):
         table.add_row(
             section,
@@ -299,10 +299,10 @@ def _print_summary(results: list[MboxInfo], console: Console) -> None:
     console.print(table)
 
     top = sorted(results, key=lambda r: r.message_count, reverse=True)[:20]
-    tt = Table(title="Top 20 carpetas por número de mensajes", header_style="bold cyan")
-    tt.add_column("Ruta", overflow="fold")
-    tt.add_column("Mensajes", justify="right")
-    tt.add_column("Tamaño", justify="right")
+    tt = Table(title="Top 20 folders by message count", header_style="bold cyan")
+    tt.add_column("Path", overflow="fold")
+    tt.add_column("Messages", justify="right")
+    tt.add_column("Size", justify="right")
     for r in top:
         if r.message_count == 0:
             continue
@@ -311,9 +311,9 @@ def _print_summary(results: list[MboxInfo], console: Console) -> None:
 
     flagged = [r for r in results if r.warnings]
     if flagged:
-        wt = Table(title=f"Avisos ({len(flagged)} archivos)", header_style="bold yellow")
-        wt.add_column("Ruta", overflow="fold")
-        wt.add_column("Avisos")
+        wt = Table(title=f"Warnings ({len(flagged)} files)", header_style="bold yellow")
+        wt.add_column("Path", overflow="fold")
+        wt.add_column("Warnings")
         for r in flagged:
             wt.add_row(r.display_path, "; ".join(r.warnings))
         console.print(wt)

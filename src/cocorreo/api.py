@@ -1,9 +1,9 @@
-"""API FastAPI de cocorreo.
+"""cocorreo FastAPI API.
 
-Endpoints sincrónicos (def, no async def) — FastAPI los ejecuta en un threadpool
-para no bloquear el event loop. Cada request abre una nueva conexión SQLite
-(barato con WAL); las claves derivadas se mantienen en `app.state.keystore`
-durante toda la vida del proceso.
+Synchronous endpoints (def, not async def) — FastAPI runs them in a threadpool
+so the event loop isn't blocked. Each request opens a new SQLite connection
+(cheap with WAL); the derived keys are kept in `app.state.keystore` for the
+whole lifetime of the process.
 """
 
 import base64
@@ -41,12 +41,12 @@ from .models import (
     WeekdayStat,
     YearStat,
 )
-from .sanitize import sanitize_html
+from .sanitise import sanitise_html
 
 SNIPPET_LEN = 240
 
 
-# ---------- cursor de paginación ----------
+# ---------- pagination cursor ----------
 
 def encode_cursor(date_utc: str, id_: int) -> str:
     raw = json.dumps([date_utc, id_], separators=(",", ":")).encode()
@@ -94,7 +94,7 @@ _DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _normalize_date_from(s: Optional[str]) -> Optional[str]:
-    """Si el cliente pasa 'YYYY-MM-DD', expandimos al inicio del día UTC."""
+    """If the client passes 'YYYY-MM-DD', we expand it to the start of the UTC day."""
     if not s:
         return None
     if _DATE_ONLY_RE.match(s):
@@ -103,7 +103,7 @@ def _normalize_date_from(s: Optional[str]) -> Optional[str]:
 
 
 def _normalize_date_to(s: Optional[str]) -> Optional[str]:
-    """Para `date_to`, expandimos a fin de día (inclusive)."""
+    """For `date_to`, we expand it to the end of the day (inclusive)."""
     if not s:
         return None
     if _DATE_ONLY_RE.match(s):
@@ -121,7 +121,7 @@ def _build_filters(
     has_attachment: Optional[bool],
     cursor: Optional[str],
 ) -> tuple[list[str], list[str], list]:
-    """Construye (joins, wheres, params) para filtros comunes de listado/búsqueda."""
+    """Builds (joins, wheres, params) for the common listing/search filters."""
     wheres: list[str] = []
     params: list = []
     joins: list[str] = []
@@ -152,29 +152,29 @@ def _build_filters(
         try:
             cur_date, cur_id = decode_cursor(cursor)
         except Exception:
-            raise HTTPException(400, "cursor inválido")
+            raise HTTPException(400, "invalid cursor")
         wheres.append("(m.date_utc < ? OR (m.date_utc = ? AND m.id < ?))")
         params.extend([cur_date, cur_date, cur_id])
     return joins, wheres, params
 
 
-# ---------- factoría ----------
+# ---------- factory ----------
 
 def create_app(keystore: Keystore) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        # Sanity check al arrancar (clave correcta, esquema aplicado).
+        # Sanity check on startup (correct key, schema applied).
         with db.connect(keystore.db_path, keystore.keys) as conn:
             ver = conn.get_schema_version()
             if ver is None:
                 raise RuntimeError(
-                    f"BD sin esquema en {keystore.db_path}. Lanza `cocorreo init` primero."
+                    f"no schema found in database {keystore.db_path}. Run `cocorreo init` first."
                 )
         yield
 
     app = FastAPI(
         title="cocorreo",
-        description="Archivo personal de correo electrónico — API local.",
+        description="Personal email archive — local API.",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -182,13 +182,13 @@ def create_app(keystore: Keystore) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],         # local dev; en prod el frontend va servido por el mismo FastAPI
+        allow_origins=["*"],         # local dev; in prod the frontend is served by the same FastAPI
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # ---------- dependencia: BD ----------
+    # ---------- dependency: DB ----------
 
     def get_db(request: Request):
         ks: Keystore = request.app.state.keystore
@@ -218,9 +218,9 @@ def create_app(keystore: Keystore) -> FastAPI:
     @app.get("/messages", response_model=MessageListResponse)
     def list_messages(
         conn: DbDep,
-        account: Annotated[Optional[str], Query(description="Filtra por cuenta.")] = None,
-        folder: Annotated[Optional[str], Query(description="Filtra por carpeta (folder_display).")] = None,
-        from_addr: Annotated[Optional[str], Query(alias="from", description="Filtra por remitente exacto.")] = None,
+        account: Annotated[Optional[str], Query(description="Filters by account.")] = None,
+        folder: Annotated[Optional[str], Query(description="Filters by folder (folder_display).")] = None,
+        from_addr: Annotated[Optional[str], Query(alias="from", description="Filters by exact sender.")] = None,
         date_from: Annotated[Optional[str], Query(description="ISO 8601, inclusive.")] = None,
         date_to: Annotated[Optional[str], Query(description="ISO 8601, inclusive.")] = None,
         has_attachment: Annotated[Optional[bool], Query()] = None,
@@ -254,7 +254,7 @@ def create_app(keystore: Keystore) -> FastAPI:
     @app.get("/search", response_model=SearchResponse)
     def search(
         conn: DbDep,
-        q: Annotated[str, Query(min_length=1, description="Sintaxis FTS5.")],
+        q: Annotated[str, Query(min_length=1, description="FTS5 syntax.")],
         account: Annotated[Optional[str], Query()] = None,
         folder: Annotated[Optional[str], Query()] = None,
         from_addr: Annotated[Optional[str], Query(alias="from")] = None,
@@ -270,7 +270,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             has_attachment=has_attachment, cursor=cursor,
         )
 
-        # El MATCH va en el WHERE base; los demás filtros se concatenan con AND.
+        # MATCH goes in the base WHERE; the other filters are concatenated with AND.
         extra_where = ("AND " + " AND ".join(wheres)) if wheres else ""
         join_clause = " ".join(joins)
         distinct = "DISTINCT" if joins else ""
@@ -282,12 +282,12 @@ def create_app(keystore: Keystore) -> FastAPI:
             f"{extra_where} "
             "ORDER BY m.date_utc DESC, m.id DESC LIMIT ?"
         )
-        # El MATCH va PRIMERO en params; _build_filters ya devuelve los suyos en orden.
+        # MATCH goes FIRST in params; _build_filters already returns its own in order.
         match_params = [q] + params + [limit + 1]
         try:
             rows = conn.execute(sql, match_params).fetchall()
         except Exception as e:
-            raise HTTPException(400, f"consulta FTS5 inválida: {e}")
+            raise HTTPException(400, f"invalid FTS5 query: {e}")
 
         has_more = len(rows) > limit
         items = [_row_to_summary(r) for r in rows[:limit]]
@@ -308,7 +308,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             (message_id,),
         ).fetchone()
         if not row:
-            raise HTTPException(404, "mensaje no encontrado")
+            raise HTTPException(404, "message not found")
 
         (id_, msg_id_str, synth, subject, from_name, from_addr, date_utc,
          date_original, in_reply_to, refs, size, has_html, has_atts,
@@ -368,7 +368,7 @@ def create_app(keystore: Keystore) -> FastAPI:
         return MessageDetail(
             id=id_,
             message_id=msg_id_str,
-            synthesized_id=bool(synth),
+            synthesised_id=bool(synth),
             subject=subject or "",
             from_=Address(name=from_name or "", addr=from_addr) if from_addr else None,
             to=to_,
@@ -380,7 +380,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             in_reply_to=in_reply_to,
             references_chain=refs,
             body_text=body_text or "",
-            body_html=sanitize_html(body_html) if body_html else None,
+            body_html=sanitise_html(body_html) if body_html else None,
             size_bytes=size or 0,
             has_html=bool(has_html),
             has_attachments=bool(has_atts),
@@ -392,10 +392,10 @@ def create_app(keystore: Keystore) -> FastAPI:
 
     @app.get("/messages/{message_id}/thread", response_model=ThreadResponse)
     def message_thread(message_id: int, conn: DbDep) -> ThreadResponse:
-        # CTE recursivo: empieza por el mensaje dado y expande hacia padres
-        # (siguiendo `in_reply_to`) y hacia hijos (otros mensajes que apuntan
-        # a éste). SQLite limita recursión a 1000 iteraciones por defecto,
-        # más que suficiente para hilos típicos.
+        # Recursive CTE: starts from the given message and expands towards parents
+        # (following `in_reply_to`) and towards children (other messages that point
+        # to this one). SQLite limits recursion to 1000 iterations by default,
+        # more than enough for typical threads.
         sql = f"""
             WITH RECURSIVE thread_msgids(msgid) AS (
                 SELECT message_id FROM messages WHERE id = ?
@@ -415,9 +415,9 @@ def create_app(keystore: Keystore) -> FastAPI:
         """
         rows = conn.execute(sql, (message_id,)).fetchall()
         if not rows:
-            raise HTTPException(404, "mensaje no encontrado")
+            raise HTTPException(404, "message not found")
         items = [_row_to_summary(r) for r in rows]
-        # El root es el más antiguo del hilo (primer item por orden ASC).
+        # The root is the oldest in the thread (first item in ASC order).
         return ThreadResponse(root_id=items[0].id, items=items)
 
     # ---------- /messages/{id}/export.eml ----------
@@ -429,7 +429,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             try:
                 data, filename = export.build_eml(conn, ks, message_id)
             except LookupError:
-                raise HTTPException(404, "mensaje no encontrado")
+                raise HTTPException(404, "message not found")
         headers = {
             "Content-Disposition": (
                 f"attachment; filename=\"{filename}\"; "
@@ -455,11 +455,11 @@ def create_app(keystore: Keystore) -> FastAPI:
                 (message_id, att_id),
             ).fetchone()
         if not row:
-            raise HTTPException(404, "adjunto no encontrado")
+            raise HTTPException(404, "attachment not found")
         sha256, mime_type, size_bytes, filename, inline = row
         blob_path = importer.attachment_blob_path(ks.attachments_dir, sha256)
         if not blob_path.is_file():
-            raise HTTPException(500, f"blob no existe en disco: {sha256[:16]}…")
+            raise HTTPException(500, f"blob doesn't exist on disk: {sha256[:16]}…")
 
         attach_key = ks.keys.attach_key
 
@@ -471,7 +471,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             headers["Content-Length"] = str(size_bytes)
         if filename:
             disp = "inline" if inline else "attachment"
-            # RFC 5987 para nombres no-ASCII (acentos, ñ, etc.)
+            # RFC 5987 for non-ASCII filenames (accents, etc.)
             headers["Content-Disposition"] = (
                 f"{disp}; filename=\"{filename}\"; "
                 f"filename*=UTF-8''{quote(filename)}"
@@ -487,7 +487,7 @@ def create_app(keystore: Keystore) -> FastAPI:
     @app.get("/images", response_model=ImageListResponse)
     def list_images(
         conn: DbDep,
-        min_size: Annotated[int, Query(ge=0, description="Bytes mínimos del blob.")] = 102_400,
+        min_size: Annotated[int, Query(ge=0, description="Minimum blob size in bytes.")] = 102_400,
         date_from: Annotated[Optional[str], Query()] = None,
         date_to: Annotated[Optional[str], Query()] = None,
         account: Annotated[Optional[str], Query()] = None,
@@ -495,7 +495,7 @@ def create_app(keystore: Keystore) -> FastAPI:
         limit: Annotated[int, Query(ge=1, le=200)] = 60,
         cursor: Annotated[Optional[str], Query()] = None,
     ) -> ImageListResponse:
-        # Pre-agregación: filtros sobre rows (cuenta, fechas, tipo, tamaño).
+        # Pre-aggregation: filters over rows (account, dates, type, size).
         wheres: list[str] = ["a.mime_type LIKE 'image/%'", "a.size_bytes >= ?"]
         params: list = [min_size]
         joins: list[str] = []
@@ -517,9 +517,9 @@ def create_app(keystore: Keystore) -> FastAPI:
                 wheres.append("ms.folder_display = ?")
                 params.append(folder)
 
-        # SQLite: GROUP BY con bare columns devuelve el row asociado al MAX.
-        # Lo envolvemos en una subquery para aplicar el cursor sobre el resultado
-        # agregado (no sobre las rows pre-agregación).
+        # SQLite: GROUP BY with bare columns returns the row associated with the MAX.
+        # We wrap it in a subquery to apply the cursor over the aggregated result
+        # (not over the pre-aggregation rows).
         inner_sql = f"""
             SELECT a.id AS att_id, m.id AS message_id, ma.filename, a.mime_type, a.size_bytes,
                    MAX(m.date_utc) AS latest_date, m.subject, m.from_addr, ma.inline,
@@ -537,7 +537,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             try:
                 cur_date, cur_id = decode_cursor(cursor)
             except Exception:
-                raise HTTPException(400, "cursor inválido")
+                raise HTTPException(400, "invalid cursor")
             cursor_clause = "WHERE (g.latest_date < ? OR (g.latest_date = ? AND g.att_id < ?))"
             params.extend([cur_date, cur_date, cur_id])
         params.append(limit + 1)
@@ -595,7 +595,7 @@ def create_app(keystore: Keystore) -> FastAPI:
 
     @app.get("/stats", response_model=StatsResponse)
     def stats(conn: DbDep) -> StatsResponse:
-        # KPIs simples
+        # Simple KPIs
         total_msgs = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         total_sources = conn.execute("SELECT COUNT(*) FROM message_sources").fetchone()[0]
         total_att_unique = conn.execute("SELECT COUNT(*) FROM attachments").fetchone()[0]
@@ -621,7 +621,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             """
         ).fetchall()
 
-        # Limitamos a >= 2010 para mantener acotada la lista de meses (~15 años x 12)
+        # We limit to >= 2010 to keep the list of months bounded (~15 years x 12)
         by_month = conn.execute(
             """
             SELECT substr(date_utc, 1, 7) AS month, COUNT(*)
@@ -630,7 +630,7 @@ def create_app(keystore: Keystore) -> FastAPI:
             """
         ).fetchall()
 
-        # Hora UTC (chars 12-13 del ISO 'YYYY-MM-DDTHH:MM:SS+TZ').
+        # UTC hour (chars 12-13 of the ISO 'YYYY-MM-DDTHH:MM:SS+TZ').
         by_hour = conn.execute(
             """
             SELECT CAST(substr(date_utc, 12, 2) AS INTEGER) AS hour, COUNT(*)
@@ -640,8 +640,8 @@ def create_app(keystore: Keystore) -> FastAPI:
             """
         ).fetchall()
 
-        # Día de la semana: SQLite strftime('%w') es 0=domingo … 6=sábado.
-        # Convertimos a ISO: 0=lunes … 6=domingo.
+        # Day of the week: SQLite strftime('%w') is 0=Sunday … 6=Saturday.
+        # We convert to ISO: 0=Monday … 6=Sunday.
         by_weekday = conn.execute(
             """
             SELECT (CAST(strftime('%w', date_utc) AS INTEGER) + 6) % 7 AS wd, COUNT(*)

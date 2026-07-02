@@ -1,17 +1,17 @@
 import type { MessageListFilters } from "@/types";
 
 export interface ParsedQuery {
-  /** Parte de la consulta lista para enviar al endpoint `/search?q=…`. */
+  /** Part of the query ready to send to the `/search?q=…` endpoint. */
   fts: string;
-  /** Filtros estructurados extraídos del input. Sobrescriben a los del panel. */
+  /** Structured filters extracted from the input. Override the panel's own. */
   filters: MessageListFilters;
 }
 
-// Operadores que mapean al panel de filtros estructurados del backend.
+// Operators that map to the backend's structured filter panel.
 const FILTER_OPS = new Set(["from", "after", "before", "account"]);
 
-// Aliases user-friendly → columnas FTS5 reales. Pasamos `to:X` como
-// `addresses_text:X` porque no tenemos una columna FTS5 separada por destinatario.
+// User-friendly aliases → actual FTS5 columns. We pass `to:X` as
+// `addresses_text:X` because we don't have a separate FTS5 column per recipient.
 const FTS_COLUMN_ALIASES: Record<string, string> = {
   to: "addresses_text",
   cc: "addresses_text",
@@ -20,7 +20,7 @@ const FTS_COLUMN_ALIASES: Record<string, string> = {
 
 function tokenize(input: string): string[] {
   const tokens: string[] = [];
-  // Soporta `op:"frase entre comillas"`, `"frase"` suelta y tokens sin espacios.
+  // Supports `op:"quoted phrase"`, a standalone `"phrase"` and tokens without spaces.
   const re = /[a-z_]+:"[^"]*"|"[^"]*"|\S+/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(input)) !== null) tokens.push(m[0]);
@@ -32,7 +32,7 @@ export function parseQuery(input: string): ParsedQuery {
   const ftsTokens: string[] = [];
 
   for (const raw of tokenize(input.trim())) {
-    // Caso especial: `has:attachment` no es operador-con-valor estándar.
+    // Special case: `has:attachment` isn't a standard operator-with-value.
     if (raw.toLowerCase() === "has:attachment") {
       filters.has_attachment = true;
       continue;
@@ -63,8 +63,8 @@ export function parseQuery(input: string): ParsedQuery {
       }
     }
 
-    // Token desconocido → pasa tal cual al motor FTS5 (preserva la sintaxis
-    // avanzada del usuario: `subject:foo*`, `body NEAR/5 algo`, etc.).
+    // Unknown token → passed through as-is to the FTS5 engine (preserves the
+    // user's advanced syntax: `subject:foo*`, `body NEAR/5 something`, etc.).
     ftsTokens.push(raw);
   }
 
@@ -72,8 +72,8 @@ export function parseQuery(input: string): ParsedQuery {
 }
 
 export function mergeFilters(panel: MessageListFilters, parsed: MessageListFilters): MessageListFilters {
-  // Los filtros del query (parsed) ganan al panel, pero solo en las keys
-  // explícitamente definidas — no pisamos por accidente con `undefined`.
+  // Filters from the query (parsed) win over the panel, but only for keys
+  // explicitly defined — we don't accidentally overwrite with `undefined`.
   const out: MessageListFilters = { ...panel };
   for (const [k, v] of Object.entries(parsed)) {
     if (v !== undefined) (out as Record<string, unknown>)[k] = v;

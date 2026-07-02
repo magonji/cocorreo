@@ -11,7 +11,7 @@ from .discover import discover
 
 app = typer.Typer(
     name="cocorreo",
-    help="Archivo personal de correo: importa, indexa y busca tus mbox/IMAP.",
+    help="Personal email archive: import, index and search your mbox/IMAP.",
     no_args_is_help=True,
 )
 console = Console()
@@ -19,16 +19,16 @@ console = Console()
 
 @app.callback()
 def _root() -> None:
-    """Punto de entrada (forzamos subcomandos para que el CLI sea estable
-    aunque solo haya uno definido)."""
+    """Entry point (we force subcommands so the CLI stays stable
+    even when only one is defined)."""
 
 
 def _read_passphrase_file(path: Path) -> str:
     raw = path.read_text(encoding="utf-8")
-    # Permitimos newline trailing (común al editar con editores); el resto se respeta.
+    # We allow a trailing newline (common when editing with text editors); the rest is kept as-is.
     passphrase = raw.rstrip("\r\n")
     if not passphrase:
-        raise keystore.KeystoreError(f"el archivo {path} está vacío")
+        raise keystore.KeystoreError(f"the file {path} is empty")
     return passphrase
 
 
@@ -37,7 +37,7 @@ def init_cmd(
     data_dir: Annotated[
         Path,
         typer.Argument(
-            help="Directorio donde se guardarán BD, adjuntos y configuración. Se creará si no existe.",
+            help="Directory where the database, attachments and configuration will be stored. Created if it doesn't exist.",
             file_okay=False,
             dir_okay=True,
             resolve_path=True,
@@ -47,22 +47,22 @@ def init_cmd(
         Optional[Path],
         typer.Option(
             "--passphrase-file",
-            help="Lee la passphrase desde este archivo (modo 600 recomendado) en vez de pedirla por TTY.",
+            help="Reads the passphrase from this file (mode 600 recommended) instead of prompting via TTY.",
             exists=True, file_okay=True, dir_okay=False, resolve_path=True,
         ),
     ] = None,
 ) -> None:
-    """Inicializa un archivo cocorreo nuevo: pide passphrase y crea la BD cifrada vacía."""
-    if keystore.is_initialized(data_dir):
-        console.print(f"[red]Ya existe un archivo inicializado en[/red] {data_dir}")
-        console.print("Si quieres empezar de cero, borra manualmente ese directorio primero.")
+    """Initialises a new cocorreo archive: asks for a passphrase and creates the empty encrypted database."""
+    if keystore.is_initialised(data_dir):
+        console.print(f"[red]An initialised archive already exists at[/red] {data_dir}")
+        console.print("If you want to start from scratch, delete that directory manually first.")
         raise typer.Exit(code=1)
 
-    console.print(f"[cyan]Inicializando archivo cocorreo en[/cyan] {data_dir}")
+    console.print(f"[cyan]Initialising cocorreo archive at[/cyan] {data_dir}")
     if passphrase_file is None:
         console.print(
-            "[dim]La passphrase no se guardará en disco. Tendrás que introducirla cada vez "
-            "que arranques el servicio. Guárdala bien.[/dim]\n"
+            "[dim]The passphrase will not be stored on disk. You'll have to enter it every time "
+            "you start the service. Keep it safe.[/dim]\n"
         )
     try:
         if passphrase_file is not None:
@@ -73,25 +73,25 @@ def init_cmd(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
 
-    with console.status("Derivando clave maestra (scrypt)…", spinner="dots"):
-        ks = keystore.initialize(data_dir, passphrase)
+    with console.status("Deriving master key (scrypt)…", spinner="dots"):
+        ks = keystore.initialise(data_dir, passphrase)
 
-    with console.status("Creando esquema de la BD…", spinner="dots"):
+    with console.status("Creating database schema…", spinner="dots"):
         with db.connect(ks.db_path, ks.keys) as conn:
             db.init_schema(conn)
 
-    console.print(f"[green]✓[/green] Configuración creada en {ks.data_dir / '.cocorreo-config.json'}")
-    console.print(f"[green]✓[/green] BD inicializada en {ks.db_path}")
+    console.print(f"[green]✓[/green] Configuration created at {ks.data_dir / '.cocorreo-config.json'}")
+    console.print(f"[green]✓[/green] Database initialised at {ks.db_path}")
     if db.HAS_SQLCIPHER:
-        console.print(f"[green]✓[/green] BD cifrada con SQLCipher (clave derivada en memoria)")
+        console.print(f"[green]✓[/green] Database encrypted with SQLCipher (key derived in memory)")
     else:
         console.print(
-            "[yellow]⚠[/yellow]  SQLCipher no disponible en esta plataforma "
-            "→ la BD usa SQLite stdlib [bold]sin cifrar[/bold]."
+            "[yellow]⚠[/yellow]  SQLCipher not available on this platform "
+            "→ the database uses stdlib SQLite [bold]unencrypted[/bold]."
         )
         console.print(
-            "   [dim]Los adjuntos van cifrados igualmente. En la Raspberry Pi (Linux) "
-            "la BD se cifrará automáticamente.[/dim]"
+            "   [dim]Attachments are still encrypted regardless. On the Raspberry Pi (Linux) "
+            "the database will be encrypted automatically.[/dim]"
         )
 
 
@@ -100,7 +100,7 @@ def import_cmd(
     profile: Annotated[
         Path,
         typer.Argument(
-            help="Ruta al perfil de Thunderbird (debe contener Mail/ y/o ImapMail/).",
+            help="Path to the Thunderbird profile (must contain Mail/ and/or ImapMail/).",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -111,7 +111,7 @@ def import_cmd(
         Path,
         typer.Option(
             "--data-dir", "-d",
-            help="Directorio del archivo cocorreo (donde está la BD y los adjuntos).",
+            help="Directory of the cocorreo archive (where the database and attachments live).",
             file_okay=False, dir_okay=True, resolve_path=True,
         ),
     ] = Path("data"),
@@ -119,30 +119,30 @@ def import_cmd(
         Optional[int],
         typer.Option(
             "--limit", "-n",
-            help="Detiene la importación tras N mensajes procesados. Útil para pruebas.",
+            help="Stops the import after N messages have been processed. Useful for testing.",
         ),
     ] = None,
     accounts: Annotated[
         Optional[str],
         typer.Option(
             "--accounts", "-a",
-            help="Coma-separado: nombres de cuenta/sección a incluir (ej. 'imap.gmail-3.com,Local Folders'). "
-                 "Por defecto importa todas.",
+            help="Comma-separated: account/section names to include (e.g. 'imap.gmail-3.com,Local Folders'). "
+                 "Imports all by default.",
         ),
     ] = None,
     passphrase_file: Annotated[
         Optional[Path],
         typer.Option(
             "--passphrase-file",
-            help="Lee la passphrase desde este archivo (modo 600 recomendado) en vez de pedirla por TTY.",
+            help="Reads the passphrase from this file (mode 600 recommended) instead of prompting via TTY.",
             exists=True, file_okay=True, dir_okay=False, resolve_path=True,
         ),
     ] = None,
 ) -> None:
-    """Fase 2: importa los mbox del perfil a la BD cifrada (idempotente)."""
-    if not keystore.is_initialized(data_dir):
-        console.print(f"[red]{data_dir} no está inicializado.[/red]")
-        console.print(f"Lanza primero: [bold]cocorreo init {data_dir}[/bold]")
+    """Phase 2: imports the profile's mbox files into the encrypted database (idempotent)."""
+    if not keystore.is_initialised(data_dir):
+        console.print(f"[red]{data_dir} is not initialised.[/red]")
+        console.print(f"Run this first: [bold]cocorreo init {data_dir}[/bold]")
         raise typer.Exit(code=1)
 
     try:
@@ -154,11 +154,11 @@ def import_cmd(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
 
-    with console.status("Desbloqueando archivo (scrypt)…", spinner="dots"):
+    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
         try:
             ks = keystore.unlock(data_dir, passphrase)
         except keystore.WrongPassphrase:
-            console.print("[red]passphrase incorrecta[/red]")
+            console.print("[red]incorrect passphrase[/red]")
             raise typer.Exit(code=1)
 
     account_filter: Optional[set[str]] = None
@@ -167,16 +167,16 @@ def import_cmd(
 
     candidates = importer.enumerate_candidates(profile, account_filter)
     if not candidates:
-        console.print(f"[yellow]No se encontraron mbox candidatos[/yellow]"
-                      + (f" con filtro accounts={account_filter}" if account_filter else "")
-                      + f" bajo {profile}")
+        console.print(f"[yellow]No candidate mbox files found[/yellow]"
+                      + (f" with filter accounts={account_filter}" if account_filter else "")
+                      + f" under {profile}")
         raise typer.Exit(code=1)
 
     console.print(
-        f"[cyan]Importando[/cyan] {len(candidates)} archivos mbox de [bold]{profile}[/bold]\n"
-        f"[cyan]Destino[/cyan]:    {ks.db_path}\n"
-        + (f"[cyan]Límite[/cyan]:     {limit:,} mensajes\n" if limit else "")
-        + (f"[cyan]Cuentas[/cyan]:    {sorted(account_filter)}\n" if account_filter else "")
+        f"[cyan]Importing[/cyan] {len(candidates)} mbox files from [bold]{profile}[/bold]\n"
+        f"[cyan]Destination[/cyan]: {ks.db_path}\n"
+        + (f"[cyan]Limit[/cyan]:      {limit:,} messages\n" if limit else "")
+        + (f"[cyan]Accounts[/cyan]:   {sorted(account_filter)}\n" if account_filter else "")
     )
 
     with db.connect(ks.db_path, ks.keys) as conn:
@@ -185,13 +185,13 @@ def import_cmd(
         stats = imp.run(candidates, limit=limit)
 
     console.print(
-        "\n[bold green]Importación finalizada[/bold green]\n"
-        f"  Mensajes nuevos:      [bold]{stats.messages_imported:,}[/bold]\n"
-        f"  Duplicados enlazados: {stats.messages_duplicate_links:,}\n"
-        f"  Errores:              {stats.messages_errors:,}\n"
-        f"  Adjuntos nuevos:      {stats.attachments_imported:,}\n"
-        f"  Adjuntos deduplic.:   {stats.attachments_dedup_hits:,}\n"
-        f"  Archivos procesados:  {stats.files_processed:,}"
+        "\n[bold green]Import finished[/bold green]\n"
+        f"  New messages:         [bold]{stats.messages_imported:,}[/bold]\n"
+        f"  Duplicates linked:    {stats.messages_duplicate_links:,}\n"
+        f"  Errors:               {stats.messages_errors:,}\n"
+        f"  New attachments:      {stats.attachments_imported:,}\n"
+        f"  Deduplicated attachments: {stats.attachments_dedup_hits:,}\n"
+        f"  Files processed:      {stats.files_processed:,}"
     )
 
 
@@ -201,31 +201,31 @@ def serve_cmd(
         Path,
         typer.Option(
             "--data-dir", "-d",
-            help="Directorio del archivo cocorreo.",
+            help="Directory of the cocorreo archive.",
             file_okay=False, dir_okay=True, resolve_path=True,
         ),
     ] = Path("data"),
     host: Annotated[
         str,
-        typer.Option("--host", "-h", help="Interfaz a escuchar."),
+        typer.Option("--host", "-h", help="Interface to listen on."),
     ] = "127.0.0.1",
     port: Annotated[
         int,
-        typer.Option("--port", "-p", help="Puerto."),
+        typer.Option("--port", "-p", help="Port."),
     ] = 8000,
     passphrase_file: Annotated[
         Optional[Path],
         typer.Option(
             "--passphrase-file",
-            help="Lee la passphrase desde este archivo en vez de pedirla por TTY.",
+            help="Reads the passphrase from this file instead of prompting via TTY.",
             exists=True, file_okay=True, dir_okay=False, resolve_path=True,
         ),
     ] = None,
 ) -> None:
-    """Arranca el servidor API local (FastAPI + uvicorn)."""
-    if not keystore.is_initialized(data_dir):
-        console.print(f"[red]{data_dir} no está inicializado.[/red]")
-        console.print(f"Lanza primero: [bold]cocorreo init {data_dir}[/bold]")
+    """Starts the local API server (FastAPI + uvicorn)."""
+    if not keystore.is_initialised(data_dir):
+        console.print(f"[red]{data_dir} is not initialised.[/red]")
+        console.print(f"Run this first: [bold]cocorreo init {data_dir}[/bold]")
         raise typer.Exit(code=1)
 
     try:
@@ -237,16 +237,16 @@ def serve_cmd(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
 
-    with console.status("Desbloqueando archivo (scrypt)…", spinner="dots"):
+    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
         try:
             ks = keystore.unlock(data_dir, passphrase)
         except keystore.WrongPassphrase:
-            console.print("[red]passphrase incorrecta[/red]")
+            console.print("[red]incorrect passphrase[/red]")
             raise typer.Exit(code=1)
 
-    console.print(f"[green]✓[/green] Archivo desbloqueado: {ks.db_path}")
-    console.print(f"[cyan]Sirviendo en[/cyan] [bold]http://{host}:{port}[/bold]")
-    console.print(f"[dim]Docs interactivas: http://{host}:{port}/docs[/dim]\n")
+    console.print(f"[green]✓[/green] Archive unlocked: {ks.db_path}")
+    console.print(f"[cyan]Serving at[/cyan] [bold]http://{host}:{port}[/bold]")
+    console.print(f"[dim]Interactive docs: http://{host}:{port}/docs[/dim]\n")
 
     from .api import create_app
     import uvicorn
@@ -261,7 +261,7 @@ def fix_dates_cmd(
         Path,
         typer.Option(
             "--data-dir", "-d",
-            help="Directorio del archivo cocorreo.",
+            help="Directory of the cocorreo archive.",
             file_okay=False, dir_okay=True, resolve_path=True,
         ),
     ] = Path("data"),
@@ -269,14 +269,14 @@ def fix_dates_cmd(
         Optional[Path],
         typer.Option(
             "--passphrase-file",
-            help="Lee la passphrase desde este archivo en vez de pedirla por TTY.",
+            help="Reads the passphrase from this file instead of prompting via TTY.",
             exists=True, file_okay=True, dir_okay=False, resolve_path=True,
         ),
     ] = None,
 ) -> None:
-    """Rellena `date_utc` en mensajes con fecha epoch usando el primer header Received."""
-    if not keystore.is_initialized(data_dir):
-        console.print(f"[red]{data_dir} no está inicializado.[/red]")
+    """Fills in `date_utc` for messages with an epoch date using the first Received header."""
+    if not keystore.is_initialised(data_dir):
+        console.print(f"[red]{data_dir} is not initialised.[/red]")
         raise typer.Exit(code=1)
 
     try:
@@ -289,21 +289,21 @@ def fix_dates_cmd(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
 
-    with console.status("Desbloqueando archivo (scrypt)…", spinner="dots"):
+    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
         try:
             ks = keystore.unlock(data_dir, passphrase)
         except keystore.WrongPassphrase:
-            console.print("[red]passphrase incorrecta[/red]")
+            console.print("[red]incorrect passphrase[/red]")
             raise typer.Exit(code=1)
 
-    with console.status("Reparando fechas desde headers Received…", spinner="dots"):
+    with console.status("Repairing dates from Received headers…", spinner="dots"):
         with db.connect(ks.db_path, ks.keys) as conn:
             reviewed, fixed = fix_dates.fix_epoch_dates(conn)
 
     console.print(
-        f"[green]✓[/green] Mensajes con fecha epoch revisados: [bold]{reviewed:,}[/bold]\n"
-        f"[green]✓[/green] Reparados con éxito:              [bold]{fixed:,}[/bold]\n"
-        f"[dim]  Restantes (sin Received parseable):  {reviewed - fixed:,}[/dim]"
+        f"[green]✓[/green] Messages with epoch date reviewed: [bold]{reviewed:,}[/bold]\n"
+        f"[green]✓[/green] Successfully repaired:            [bold]{fixed:,}[/bold]\n"
+        f"[dim]  Remaining (no parseable Received):    {reviewed - fixed:,}[/dim]"
     )
 
 
@@ -312,7 +312,7 @@ def discover_cmd(
     profile: Annotated[
         Path,
         typer.Argument(
-            help="Ruta al perfil de Thunderbird (debe contener Mail/ y/o ImapMail/).",
+            help="Path to the Thunderbird profile (must contain Mail/ and/or ImapMail/).",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -324,9 +324,9 @@ def discover_cmd(
         typer.Option(
             "--json",
             "-j",
-            help="Escribe un reporte detallado en este archivo JSON.",
+            help="Writes a detailed report to this JSON file.",
         ),
     ] = None,
 ) -> None:
-    """Fase 1: descubre y caracteriza los mbox del perfil sin importar nada."""
+    """Phase 1: discovers and characterises the profile's mbox files without importing anything."""
     discover(profile, output_json=json_out)

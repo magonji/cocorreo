@@ -1,10 +1,10 @@
-"""Heurística para rellenar `date_utc` en mensajes sin fecha válida.
+"""Heuristic to fill in `date_utc` for messages without a valid date.
 
-Cuando el header `Date:` falta o no parsea, el importer marca el mensaje con
-epoch (`1970-01-01T00:00:00+00:00`). Esos mensajes existen en la BD pero
-no se ordenan correctamente. Este módulo intenta recuperarlos extrayendo
-la fecha del **primer header `Received:`** (la entrega más reciente en la
-cadena MTA), que es el delivery time real del correo.
+When the `Date:` header is missing or fails to parse, the importer marks the message
+with epoch (`1970-01-01T00:00:00+00:00`). Those messages exist in the database but
+don't sort correctly. This module tries to recover them by extracting
+the date from the **first `Received:` header** (the most recent hop in the
+MTA chain), which is the actual delivery time of the email.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def _decode_headers(blob: Optional[bytes]) -> Optional[str]:
 
 
 def _parse_received_date(headers: str) -> tuple[Optional[datetime], Optional[str]]:
-    """Devuelve (UTC datetime, fecha-string verbatim) del primer Received: válido."""
+    """Returns (UTC datetime, verbatim date string) of the first valid Received:."""
     for line in headers.split("\n"):
         if not line.lower().startswith("received:"):
             continue
@@ -52,9 +52,9 @@ def _parse_received_date(headers: str) -> tuple[Optional[datetime], Optional[str
 
 
 def fix_epoch_dates(conn: db.Connection) -> tuple[int, int]:
-    """Recorre los mensajes con date_utc=epoch y los repara si es posible.
+    """Walks through messages with date_utc=epoch and repairs them where possible.
 
-    Devuelve (revisados, arreglados).
+    Returns (reviewed, fixed).
     """
     rows = conn.execute(
         "SELECT id, raw_headers FROM messages WHERE date_utc = ? AND raw_headers IS NOT NULL",

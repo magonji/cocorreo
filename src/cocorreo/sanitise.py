@@ -1,8 +1,8 @@
-"""Sanitización de HTML para mostrar cuerpos de correo con seguridad.
+"""HTML sanitisation for safely displaying email bodies.
 
-Quitamos `<script>`, `<iframe>`, event handlers, URLs `javascript:` y todo lo
-que pueda ejecutar código en el navegador. El frontend además renderizará el
-HTML resultante dentro de un `<iframe sandbox>` como defensa en profundidad.
+We strip `<script>`, `<iframe>`, event handlers, `javascript:` URLs and
+anything else that could execute code in the browser. The frontend also
+renders the resulting HTML inside a `<iframe sandbox>` as defence in depth.
 """
 
 from __future__ import annotations
@@ -35,11 +35,11 @@ ALLOWED_ATTRIBUTES = {
     "li": ["value"],
 }
 
-# `cid:` permite que el frontend resuelva referencias a imágenes inline.
+# `cid:` lets the frontend resolve references to inline images.
 ALLOWED_PROTOCOLS = ["http", "https", "mailto", "cid"]
 
 
-def sanitize_html(html: str) -> str:
+def sanitise_html(html: str) -> str:
     if not html:
         return ""
     return bleach.clean(

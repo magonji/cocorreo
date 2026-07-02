@@ -1,8 +1,9 @@
-"""Importer mbox → BD cifrada.
+"""Importer mbox → encrypted database.
 
-Orquesta: para cada archivo mbox bajo un perfil Thunderbird, parsea cada
-mensaje, deduplica por `Message-ID`, escribe en la BD, cifra adjuntos al
-vuelo y mantiene FTS5 actualizado. Idempotente: re-ejecutar no duplica.
+Orchestrates: for each mbox file under a Thunderbird profile, parses each
+message, deduplicates by `Message-ID`, writes to the database, encrypts
+attachments on the fly and keeps FTS5 up to date. Idempotent: re-running
+doesn't duplicate.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ class MboxCandidate:
     rel_path: str
     account: str
     section: str            # 'IMAP' | 'Local'
-    display_folder: str     # ruta relativa con UTF-7 mod decodificado
+    display_folder: str     # relative path with modified UTF-7 decoded
 
 
 @dataclass
@@ -52,7 +53,7 @@ class ImportStats:
 
 
 def attachment_blob_path(attachments_dir: Path, sha256_hex: str) -> Path:
-    """`data/attachments/ab/abc1234….bin` (sharded por primeros 2 chars hex)."""
+    """`data/attachments/ab/abc1234….bin` (sharded by first 2 hex chars)."""
     return attachments_dir / sha256_hex[:2] / f"{sha256_hex}.bin"
 
 
@@ -90,7 +91,7 @@ class Importer:
         self.run_id: Optional[int] = None
         self._errors: list[dict] = []
 
-    # ---------- ciclo de vida ----------
+    # ---------- lifecycle ----------
 
     def _begin_run(self) -> None:
         cur = self.conn.execute(
@@ -136,7 +137,7 @@ class Importer:
                 "error": err if isinstance(err, str) else f"{type(err).__name__}: {err}",
             })
 
-    # ---------- inserciones ----------
+    # ---------- inserts ----------
 
     def _ensure_attachment(self, att: message.Attachment) -> int:
         sha = att.sha256_hex
@@ -160,7 +161,7 @@ class Importer:
         return cur.lastrowid
 
     def _link_source(self, message_pk: int, cand: MboxCandidate, byte_offset: int) -> bool:
-        """True si añadimos un source nuevo, False si ya existía."""
+        """True if we added a new source, False if it already existed."""
         try:
             self.conn.execute(
                 """INSERT INTO message_sources
@@ -185,7 +186,7 @@ class Importer:
             ) VALUES (?,?,?,?, ?,?,?, ?,?, ?,?,?, ?,?,?, ?)""",
             (
                 parsed.message_id,
-                int(parsed.synthesized_id),
+                int(parsed.synthesised_id),
                 parsed.in_reply_to,
                 parsed.references_chain,
                 parsed.subject,
@@ -204,7 +205,7 @@ class Importer:
         )
         msg_pk: int = cur.lastrowid
 
-        # Direcciones
+        # Addresses
         addr_rows = []
         if parsed.from_:
             addr_rows.append((msg_pk, "from", parsed.from_.name, parsed.from_.addr))
@@ -222,7 +223,7 @@ class Importer:
                 addr_rows,
             )
 
-        # Adjuntos
+        # Attachments
         for att in parsed.attachments:
             att_id = self._ensure_attachment(att)
             self.conn.execute(
@@ -246,7 +247,7 @@ class Importer:
 
         return msg_pk
 
-    # ---------- procesado por mensaje ----------
+    # ---------- per-message processing ----------
 
     def _process_one(self, cand: MboxCandidate, byte_offset: int, raw: bytes) -> None:
         try:
@@ -255,7 +256,7 @@ class Importer:
             self._log_error(cand.rel_path, byte_offset, e)
             return
 
-        # ¿Existe ya?
+        # Does it already exist?
         row = self.conn.execute(
             "SELECT id FROM messages WHERE message_id = ?", (parsed.message_id,)
         ).fetchone()
@@ -269,7 +270,7 @@ class Importer:
             self._link_source(msg_pk, cand, byte_offset)
             self.stats.messages_imported += 1
         except sqlite3.IntegrityError as e:
-            # Carrera con duplicado dentro del mismo batch.
+            # Race with a duplicate within the same batch.
             row = self.conn.execute(
                 "SELECT id FROM messages WHERE message_id = ?", (parsed.message_id,)
             ).fetchone()
@@ -302,7 +303,7 @@ class Importer:
             console=self.console,
         ) as progress:
             outer = progress.add_task(
-                "Importando", total=len(candidates), name="", stats="",
+                "Importing", total=len(candidates), name="", stats="",
             )
 
             commit_counter = 0
@@ -312,7 +313,7 @@ class Importer:
                 progress.update(
                     outer,
                     name=cand.display_folder[:60],
-                    stats=f"{self.stats.messages_imported:,} nuevos / "
+                    stats=f"{self.stats.messages_imported:,} new / "
                           f"{self.stats.messages_duplicate_links:,} dup / "
                           f"{self.stats.messages_errors:,} err",
                 )
@@ -326,7 +327,7 @@ class Importer:
                             commit_counter = 0
                             progress.update(
                                 outer,
-                                stats=f"{self.stats.messages_imported:,} nuevos / "
+                                stats=f"{self.stats.messages_imported:,} new / "
                                       f"{self.stats.messages_duplicate_links:,} dup / "
                                       f"{self.stats.messages_errors:,} err",
                             )

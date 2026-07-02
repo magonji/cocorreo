@@ -19,8 +19,8 @@ function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
 
-  // El tema inicial lo aplicó el script inline de `index.html` antes del mount,
-  // así que reflejamos la clase ya presente para evitar mismatch.
+  // The initial theme was applied by the inline script in `index.html` before mount,
+  // so we mirror the class that's already present to avoid a mismatch.
   const [theme, setTheme] = useState<Theme>(() =>
     typeof document !== "undefined" && document.documentElement.classList.contains("dark")
       ? "dark"
@@ -32,7 +32,7 @@ function App() {
       document.documentElement.classList.toggle("dark", next === "dark");
       try {
         localStorage.setItem("cocorreo-theme", next);
-      } catch { /* ignora cuotas / modo privado */ }
+      } catch { /* ignore quota errors / private mode */ }
       return next;
     });
   };
@@ -47,9 +47,9 @@ function App() {
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-destructive">
         <div>
-          <h1 className="text-lg font-medium">No se puede contactar con el backend</h1>
+          <h1 className="text-lg font-medium">Can't reach the backend</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            ¿Está corriendo <code>cocorreo serve</code>? Esperamos en /api/.
+            Is <code>cocorreo serve</code> running? We expect it at /api/.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{healthError}</p>
         </div>
@@ -65,15 +65,15 @@ function App() {
           <div className="flex items-center gap-3">
             {health && (
               <span className="text-xs text-muted-foreground">
-                {health.total_messages.toLocaleString("es-ES")} msgs
+                {health.total_messages.toLocaleString("en-GB")} msgs
               </span>
             )}
             <button
               type="button"
               onClick={toggleTheme}
               className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-              title={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-              aria-label="Cambiar tema"
+              title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
@@ -85,19 +85,19 @@ function App() {
             active={view === "messages"}
             onClick={() => setView("messages")}
             icon={<Mail className="h-3.5 w-3.5" />}
-            label="Mensajes"
+            label="Messages"
           />
           <NavButton
             active={view === "gallery"}
             onClick={() => setView("gallery")}
             icon={<Images className="h-3.5 w-3.5" />}
-            label="Galería"
+            label="Gallery"
           />
           <NavButton
             active={view === "stats"}
             onClick={() => setView("stats")}
             icon={<BarChart3 className="h-3.5 w-3.5" />}
-            label="Estadísticas"
+            label="Statistics"
           />
         </nav>
 
@@ -130,7 +130,7 @@ function App() {
               ? <MessageDetail messageId={selectedId} onSelectMessage={setSelectedId} />
               : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
-                  <p>Selecciona un mensaje</p>
+                  <p>Select a message</p>
                 </div>
               )
             }

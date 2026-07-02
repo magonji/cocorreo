@@ -24,7 +24,7 @@ function formatDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("es-ES", sameYear
+  return d.toLocaleDateString("en-GB", sameYear
     ? { month: "short", day: "numeric" }
     : { year: "numeric", month: "short", day: "numeric" });
 }
@@ -40,9 +40,9 @@ export function MessageList({ folder, selectedId, onSelect }: Props) {
   const [filters, setFilters] = useState<MessageListFilters>({});
   const debouncedQuery = useDebouncedValue(query.trim(), 300);
 
-  // Parsea la sintaxis user-friendly (`from:`, `after:`, `has:attachment`,
-  // alias `to:`/`cc:`/`bcc:` → FTS5 addresses_text, etc.) y separa la parte
-  // FTS5 pura de los filtros estructurados.
+  // Parses the user-friendly syntax (`from:`, `after:`, `has:attachment`,
+  // aliases `to:`/`cc:`/`bcc:` → FTS5 addresses_text, etc.) and separates the
+  // pure FTS5 part from the structured filters.
   const parsed = useMemo(() => parseQuery(debouncedQuery), [debouncedQuery]);
   const effectiveFilters = useMemo(
     () => mergeFilters(filters, parsed.filters),
@@ -51,13 +51,13 @@ export function MessageList({ folder, selectedId, onSelect }: Props) {
 
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Al cambiar de folder, reseteamos también query+filtros — nuevo scope, nuevo contexto.
+  // When the folder changes, we also reset query+filters — new scope, new context.
   useEffect(() => {
     setQuery("");
     setFilters({});
   }, [folder?.account, folder?.folder]);
 
-  // Cargar primera página al cambiar cualquier parámetro relevante.
+  // Load the first page whenever any relevant parameter changes.
   useEffect(() => {
     let cancelled = false;
     setItems([]);
@@ -148,8 +148,8 @@ export function MessageList({ folder, selectedId, onSelect }: Props) {
   }, [virtualItems, items.length, hasMore, loading, loadMore]);
 
   const title = debouncedQuery
-    ? `Resultados para "${debouncedQuery}"`
-    : (folder?.label ?? "Todos los mensajes");
+    ? `Results for "${debouncedQuery}"`
+    : (folder?.label ?? "All messages");
 
   return (
     <>
@@ -169,8 +169,8 @@ export function MessageList({ folder, selectedId, onSelect }: Props) {
           {items.length === 0 && !loading && (
             <p className="p-6 text-center text-xs text-muted-foreground">
               {debouncedQuery || Object.values(filters).some((v) => v !== undefined)
-                ? "Sin resultados."
-                : "Sin mensajes en esta vista."}
+                ? "No results."
+                : "No messages in this view."}
             </p>
           )}
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -191,7 +191,7 @@ export function MessageList({ folder, selectedId, onSelect }: Props) {
                 >
                   {isLoader ? (
                     <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                      {loading ? "cargando más…" : ""}
+                      {loading ? "loading more…" : ""}
                     </div>
                   ) : (
                     <MessageRow message={m} selected={m.id === selectedId} onSelect={onSelect} />
@@ -213,7 +213,7 @@ function MessageRow({
 }: { message: MessageSummary; selected: boolean; onSelect: (id: number) => void }) {
   const fromLabel = m.from
     ? (m.from.name || m.from.addr)
-    : "(sin remitente)";
+    : "(no sender)";
   return (
     <button
       type="button"
@@ -229,7 +229,7 @@ function MessageRow({
       </div>
       <div className="flex items-center gap-2">
         <span className="flex-1 truncate text-xs" title={m.subject}>
-          {m.subject || <span className="italic text-muted-foreground">(sin asunto)</span>}
+          {m.subject || <span className="italic text-muted-foreground">(no subject)</span>}
         </span>
         {m.has_attachments && <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />}
       </div>

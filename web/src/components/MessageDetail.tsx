@@ -20,10 +20,10 @@ function fmtBytes(n: number): string {
 }
 
 function fmtDate(iso: string): string {
-  if (!iso || iso.startsWith("1970-")) return "fecha desconocida";
+  if (!iso || iso.startsWith("1970-")) return "unknown date";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("es-ES", {
+  return d.toLocaleString("en-GB", {
     year: "numeric", month: "long", day: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -55,16 +55,16 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
       })
       .catch((e: Error) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    // El hilo se carga aparte y de forma independiente para no bloquear el render
-    // del mensaje principal si la query del hilo tarda más.
+    // The thread is loaded separately and independently so it doesn't block rendering
+    // of the main message if the thread query takes longer.
     api.thread(messageId)
       .then((t) => { if (!cancelled) setThread(t.items); })
-      .catch(() => { /* hilo es opcional; ignoramos errores */ });
+      .catch(() => { /* thread is optional; we ignore errors */ });
     return () => { cancelled = true; };
   }, [messageId]);
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-muted-foreground">cargando…</div>;
+    return <div className="flex h-full items-center justify-center text-muted-foreground">loading…</div>;
   }
   if (error) {
     return <div className="p-6 text-destructive">{error}</div>;
@@ -78,7 +78,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
     <div className="flex h-full flex-col">
       <header className="space-y-2 border-b border-border px-6 py-4">
         <h1 className="text-lg font-semibold leading-snug">
-          {msg.subject || <span className="italic text-muted-foreground">(sin asunto)</span>}
+          {msg.subject || <span className="italic text-muted-foreground">(no subject)</span>}
         </h1>
         <div className="space-y-0.5 text-xs text-muted-foreground">
           {msg.from && (
@@ -90,14 +90,14 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
           <div className="flex items-center gap-2">
             <Calendar className="h-3 w-3" />
             <span>{fmtDate(msg.date_utc)}</span>
-            {msg.synthesized_id && (
+            {msg.synthesised_id && (
               <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-[10px]">
-                ID sintético
+                Synthetic ID
               </span>
             )}
           </div>
           {msg.to.length > 0 && (
-            <div><span className="uppercase tracking-wide">para:</span> {msg.to.map(fmtAddr).join(", ")}</div>
+            <div><span className="uppercase tracking-wide">to:</span> {msg.to.map(fmtAddr).join(", ")}</div>
           )}
           {msg.cc.length > 0 && (
             <div><span className="uppercase tracking-wide">cc:</span> {msg.cc.map(fmtAddr).join(", ")}</div>
@@ -117,7 +117,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
                 className="inline-flex items-center gap-1.5 rounded border border-border bg-secondary px-2 py-1 text-xs hover:bg-accent"
               >
                 <Paperclip className="h-3 w-3" />
-                <span className="max-w-xs truncate">{a.filename || "(sin nombre)"}</span>
+                <span className="max-w-xs truncate">{a.filename || "(no name)"}</span>
                 <span className="text-muted-foreground">· {fmtBytes(a.size_bytes)}</span>
               </a>
             ))}
@@ -128,7 +128,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
           <details className="pt-2">
             <summary className="cursor-pointer text-xs text-muted-foreground">
               <Folder className="mr-1 inline h-3 w-3" />
-              aparece en {msg.sources.length} ubicación{msg.sources.length !== 1 && "es"}
+              appears in {msg.sources.length} location{msg.sources.length !== 1 && "s"}
             </summary>
             <ul className="ml-5 mt-1 list-disc space-y-0.5 text-xs text-muted-foreground">
               {msg.sources.map((s, i) => (
@@ -144,12 +144,12 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
           <details className="pt-2" open={thread.length <= 8}>
             <summary className="cursor-pointer text-xs text-muted-foreground">
               <MessagesSquare className="mr-1 inline h-3 w-3" />
-              hilo de {thread.length} mensajes
+              thread of {thread.length} messages
             </summary>
             <ul className="ml-1 mt-1.5 space-y-0.5">
               {thread.map((t) => {
                 const isCurrent = t.id === msg.id;
-                const who = t.from?.name || t.from?.addr || "(sin remitente)";
+                const who = t.from?.name || t.from?.addr || "(no sender)";
                 return (
                   <li key={t.id}>
                     <button
@@ -168,7 +168,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
                       </span>
                       <span className="w-40 shrink-0 truncate" title={who}>{who}</span>
                       <span className="flex-1 truncate">
-                        {t.subject || <span className="italic">(sin asunto)</span>}
+                        {t.subject || <span className="italic">(no subject)</span>}
                       </span>
                     </button>
                   </li>
@@ -179,7 +179,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          {/* Toggle vista solo si hay ambos formatos. */}
+          {/* Toggle view only if both formats are available. */}
           {msg.body_html && msg.body_text && (
             <div className="inline-flex items-center gap-0 rounded border border-border">
               <button
@@ -200,7 +200,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
                   effectiveView === "text" ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent/50",
                 )}
               >
-                <FileText className="h-3 w-3" /> Texto
+                <FileText className="h-3 w-3" /> Text
               </button>
             </div>
           )}
@@ -208,7 +208,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
             href={api.exportEmlUrl(msg.id)}
             download
             className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Descargar el mensaje reconstruido en formato .eml (RFC 5322) con adjuntos descifrados"
+            title="Download the reconstructed message in .eml format (RFC 5322) with decrypted attachments"
           >
             <Download className="h-3 w-3" /> .eml
           </a>
@@ -221,7 +221,7 @@ export function MessageDetail({ messageId, onSelectMessage }: Props) {
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <pre className="m-0 whitespace-pre-wrap break-words p-6 font-sans text-sm leading-relaxed">
             {msg.body_text || (
-              <span className="italic text-muted-foreground">(sin cuerpo)</span>
+              <span className="italic text-muted-foreground">(no body)</span>
             )}
           </pre>
         </div>

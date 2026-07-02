@@ -1,12 +1,16 @@
 services:
   backend:
+    # `image` is used by `docker compose pull` (prebuilt multi-arch image from
+    # GitHub Actions/GHCR); `build` is kept so `docker compose build` still
+    # works for local development without needing CI.
+    image: ${GHCR_NAMESPACE:-ghcr.io/yourusername}/cocorreo-backend:latest
     build: .
     restart: unless-stopped
     volumes:
-      # Directorio de datos ya importado (BD cifrada + adjuntos). Cópialo/rsync-éalo
-      # al servidor y apunta aquí; por defecto usa ./data junto a este archivo.
+      # Already-imported data directory (encrypted DB + attachments). Copy/rsync it
+      # to the server and point this here; defaults to ./data next to this file.
       - ${COCORREO_DATA_DIR:-./data}:/data
-      # Archivo de texto plano con la passphrase, permisos 600, montado solo lectura.
+      # Plain-text file with the passphrase, mode 600, mounted read-only.
       - ${COCORREO_PASSPHRASE_FILE:-./secrets/passphrase.txt}:/run/secrets/cocorreo_passphrase:ro
     command:
       - serve
@@ -22,6 +26,7 @@ services:
       - internal
 
   web:
+    image: ${GHCR_NAMESPACE:-ghcr.io/yourusername}/cocorreo-web:latest
     build: ./web
     restart: unless-stopped
     depends_on:

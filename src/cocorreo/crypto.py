@@ -1,15 +1,15 @@
-"""Primitivas criptográficas.
+"""Cryptographic primitives.
 
-Derivación de claves desde la passphrase del usuario (scrypt → HKDF) y
-cifrado AEAD streaming (AES-256-GCM) para adjuntos.
+Key derivation from the user's passphrase (scrypt → HKDF) and streaming
+AEAD encryption (AES-256-GCM) for attachments.
 
-Política de claves:
+Key policy:
     passphrase  ──[scrypt]──>  master(32B)
     master      ──[HKDF "cocorreo-db"]──>          db_key(32B)
     master      ──[HKDF "cocorreo-attachments"]──> attach_key(32B)
 
-`db_key` se pasa a SQLCipher como clave raw hex (sin KDF adicional).
-`attach_key` cifra cada adjunto con AES-256-GCM y nonce único por archivo.
+`db_key` is passed to SQLCipher as a raw hex key (no additional KDF).
+`attach_key` encrypts each attachment with AES-256-GCM and a unique nonce per file.
 """
 
 from __future__ import annotations
@@ -24,21 +24,21 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
-# Tamaños de scrypt. N=2^15 da ~128 MB de RAM, ~200 ms en hardware moderno,
-# ~1 s en una Raspberry Pi 4/5. Cómodo para uso interactivo, no para fuerza bruta.
+# scrypt sizing. N=2^15 gives ~128 MB of RAM, ~200 ms on modern hardware,
+# ~1 s on a Raspberry Pi 4/5. Comfortable for interactive use, not for brute force.
 SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
 KEY_LEN = 32
 
-NONCE_LEN = 12  # AES-GCM estándar
+NONCE_LEN = 12  # standard AES-GCM
 TAG_LEN = 16
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
 @dataclass(frozen=True)
 class DerivedKeys:
-    """Conjunto de claves derivadas tras desbloquear el almacén."""
+    """Set of keys derived once the store has been unlocked."""
 
     db_key: bytes
     attach_key: bytes
@@ -49,19 +49,19 @@ class DerivedKeys:
 
 
 def derive_master(passphrase: str, salt: bytes) -> bytes:
-    """Aplica scrypt a la passphrase para obtener una clave maestra de 32 bytes."""
+    """Applies scrypt to the passphrase to obtain a 32-byte master key."""
     if not passphrase:
-        raise ValueError("passphrase vacía")
+        raise ValueError("empty passphrase")
     if len(salt) < 16:
-        raise ValueError("salt demasiado corto (mínimo 16 bytes)")
+        raise ValueError("salt too short (minimum 16 bytes)")
     kdf = Scrypt(salt=salt, length=KEY_LEN, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P)
     return kdf.derive(passphrase.encode("utf-8"))
 
 
 def derive_keys(master: bytes) -> DerivedKeys:
-    """Deriva las dos claves de uso (BD + adjuntos) desde la clave maestra."""
+    """Derives the two usage keys (DB + attachments) from the master key."""
     if len(master) != KEY_LEN:
-        raise ValueError(f"master debe tener {KEY_LEN} bytes")
+        raise ValueError(f"master must be {KEY_LEN} bytes long")
     db_key = HKDF(
         algorithm=hashes.SHA256(), length=KEY_LEN, salt=None, info=b"cocorreo-db"
     ).derive(master)
@@ -72,13 +72,13 @@ def derive_keys(master: bytes) -> DerivedKeys:
 
 
 def encrypt_file(src: BinaryIO, dst: BinaryIO, key: bytes) -> None:
-    """Cifra un stream binario a otro stream binario con AES-256-GCM.
+    """Encrypts a binary stream into another binary stream with AES-256-GCM.
 
-    Formato de salida:
+    Output format:
         nonce (12 B) || ciphertext (N B) || tag (16 B)
 
-    Streaming: memoria acotada a `CHUNK_SIZE`. Adecuado para adjuntos de
-    cualquier tamaño.
+    Streaming: memory bounded by `CHUNK_SIZE`. Suitable for attachments of
+    any size.
     """
     nonce = os.urandom(NONCE_LEN)
     cipher = Cipher(algorithms.AES(key), modes.GCM(nonce))
@@ -94,15 +94,15 @@ def encrypt_file(src: BinaryIO, dst: BinaryIO, key: bytes) -> None:
 
 
 def decrypt_file(src_path: Path, dst: BinaryIO, key: bytes) -> None:
-    """Descifra un archivo en formato `nonce||ct||tag` a un stream destino.
+    """Decrypts a `nonce||ct||tag`-format file to a destination stream.
 
-    Necesita un archivo seekable porque el tag está al final (GCM requiere
-    el tag antes de empezar la verificación). Para adjuntos en disco esto
-    no es restrictivo.
+    Needs a seekable file because the tag sits at the end (GCM requires
+    the tag before verification can start). Not a restriction for
+    attachments stored on disk.
     """
     size = src_path.stat().st_size
     if size < NONCE_LEN + TAG_LEN:
-        raise ValueError(f"archivo demasiado pequeño para ser un blob cifrado: {src_path}")
+        raise ValueError(f"file too small to be an encrypted blob: {src_path}")
     with src_path.open("rb") as f:
         nonce = f.read(NONCE_LEN)
         f.seek(size - TAG_LEN)
@@ -121,15 +121,15 @@ def decrypt_file(src_path: Path, dst: BinaryIO, key: bytes) -> None:
 
 
 def iter_decrypt(src_path: Path, key: bytes, chunk_size: int = CHUNK_SIZE) -> Iterator[bytes]:
-    """Generador que descifra un blob al vuelo en chunks. Ideal para streaming HTTP.
+    """Generator that decrypts a blob on the fly in chunks. Ideal for HTTP streaming.
 
-    Mismo formato de entrada que `decrypt_file` (`nonce(12)||ct||tag(16)`); el tag
-    se lee primero (seek al final), luego se descifra el cuerpo en chunks y al
-    final se cierra con `finalize()` (que verifica el tag GCM).
+    Same input format as `decrypt_file` (`nonce(12)||ct||tag(16)`); the tag
+    is read first (seek to the end), then the body is decrypted in chunks and
+    finally closed with `finalize()` (which verifies the GCM tag).
     """
     size = src_path.stat().st_size
     if size < NONCE_LEN + TAG_LEN:
-        raise ValueError(f"archivo demasiado pequeño para ser blob cifrado: {src_path}")
+        raise ValueError(f"file too small to be an encrypted blob: {src_path}")
     with src_path.open("rb") as f:
         nonce = f.read(NONCE_LEN)
         f.seek(size - TAG_LEN)
@@ -152,7 +152,7 @@ def iter_decrypt(src_path: Path, key: bytes, chunk_size: int = CHUNK_SIZE) -> It
 
 
 def encrypt_bytes(data: bytes, key: bytes) -> bytes:
-    """Cifra un blob pequeño en memoria. Útil para tokens de verificación."""
+    """Encrypts a small in-memory blob. Useful for verification tokens."""
     nonce = os.urandom(NONCE_LEN)
     cipher = Cipher(algorithms.AES(key), modes.GCM(nonce))
     enc = cipher.encryptor()
@@ -161,9 +161,9 @@ def encrypt_bytes(data: bytes, key: bytes) -> bytes:
 
 
 def decrypt_bytes(blob: bytes, key: bytes) -> bytes:
-    """Descifra un blob pequeño cifrado con `encrypt_bytes`."""
+    """Decrypts a small blob encrypted with `encrypt_bytes`."""
     if len(blob) < NONCE_LEN + TAG_LEN:
-        raise ValueError("blob demasiado pequeño")
+        raise ValueError("blob too small")
     nonce = blob[:NONCE_LEN]
     tag = blob[-TAG_LEN:]
     ct = blob[NONCE_LEN:-TAG_LEN]

@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# ---- builder: resuelve deps con uv, compila si hace falta (p.ej. sqlcipher3-binary en arm64) ----
+# ---- builder: resolves deps with uv (wheels only on amd64/arm64; build-essential
+# stays as a safety net for any transitive dependency without a prebuilt wheel) ----
 FROM python:3.12-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libssl-dev tclsh \
+    build-essential libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -12,14 +13,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Capa cacheable: instala dependencias antes de copiar el código fuente.
+# Cacheable layer: install dependencies before copying the source code.
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-# ---- runtime: imagen final sin toolchain de compilación ----
+# ---- runtime: final image without the compilation toolchain ----
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3 \

@@ -21,7 +21,7 @@ function fmtDate(iso: string): string {
   if (!iso || iso.startsWith("1970-")) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return d.toLocaleDateString("es-ES", { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
 }
 
 export function GalleryView({ onOpenMessage }: Props) {
@@ -36,7 +36,7 @@ export function GalleryView({ onOpenMessage }: Props) {
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // (Re)fetch al cambiar filtros.
+  // (Re)fetch when filters change.
   useEffect(() => {
     let cancelled = false;
     setItems([]);
@@ -80,7 +80,7 @@ export function GalleryView({ onOpenMessage }: Props) {
       .finally(() => setLoading(false));
   }, [cursor, dateFrom, dateTo, hasMore, loading, minSizeKB]);
 
-  // Trigger load-more cuando el sentinel entra en viewport.
+  // Trigger load-more when the sentinel enters the viewport.
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node) return;
@@ -95,16 +95,16 @@ export function GalleryView({ onOpenMessage }: Props) {
     <div className="flex h-full flex-col">
       <header className="space-y-3 border-b border-border px-6 py-4">
         <div className="flex items-baseline justify-between">
-          <h1 className="text-lg font-semibold">Galería de imágenes</h1>
+          <h1 className="text-lg font-semibold">Image gallery</h1>
           <span className="text-xs text-muted-foreground tabular-nums">
-            {items.length.toLocaleString("es-ES")}{hasMore ? "+" : ""} imágenes
+            {items.length.toLocaleString("en-GB")}{hasMore ? "+" : ""} images
           </span>
         </div>
 
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
-              Tamaño mínimo
+              Minimum size
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -136,7 +136,7 @@ export function GalleryView({ onOpenMessage }: Props) {
 
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
-              Desde
+              From
             </label>
             <input
               type="date"
@@ -147,7 +147,7 @@ export function GalleryView({ onOpenMessage }: Props) {
           </div>
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">
-              Hasta
+              To
             </label>
             <input
               type="date"
@@ -177,7 +177,7 @@ export function GalleryView({ onOpenMessage }: Props) {
         {items.length === 0 && !loading && !error && (
           <div className="flex h-32 items-center justify-center gap-2 text-muted-foreground">
             <ImageOff className="h-4 w-4" />
-            <span className="text-sm">Sin imágenes con esos filtros.</span>
+            <span className="text-sm">No images match these filters.</span>
           </div>
         )}
 
@@ -191,7 +191,7 @@ export function GalleryView({ onOpenMessage }: Props) {
           {loading && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              cargando…
+              loading…
             </div>
           )}
         </div>
@@ -208,7 +208,7 @@ function ImageCard({ img, onOpen }: { img: ImageItem; onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       className="group relative flex flex-col gap-1.5 overflow-hidden rounded-lg border border-border bg-card text-left hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-      title={img.filename || "(sin nombre)"}
+      title={img.filename || "(no name)"}
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
         {failed ? (
@@ -227,7 +227,7 @@ function ImageCard({ img, onOpen }: { img: ImageItem; onOpen: () => void }) {
         {img.appearances > 1 && (
           <span
             className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur"
-            title={`Aparece en ${img.appearances} mensajes`}
+            title={`Appears in ${img.appearances} messages`}
           >
             ×{img.appearances}
           </span>
@@ -235,7 +235,7 @@ function ImageCard({ img, onOpen }: { img: ImageItem; onOpen: () => void }) {
       </div>
       <div className="space-y-0.5 px-2 pb-2">
         <div className="truncate text-xs font-medium">
-          {img.filename || <span className="italic text-muted-foreground">(sin nombre)</span>}
+          {img.filename || <span className="italic text-muted-foreground">(no name)</span>}
         </div>
         <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
           <span className="truncate">{img.from_addr || "?"}</span>
