@@ -1,0 +1,26 @@
+[project]
+name = "cocorreo"
+version = "0.1.0"
+description = "Archivo personal de correo electrónico cifrado, con búsqueda local"
+readme = "README.md"
+authors = [
+    { name = "Mario González Jiménez", email = "magonji@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=48.0.0",
+    "html2text>=2025.4.15",
+    "rich>=15.0.0",
+    "typer>=0.25.1",
+    "sqlcipher3-binary>=0.6.0; sys_platform == 'linux'",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.47.0",
+    "bleach>=6.3.0",
+]
+
+[project.scripts]
+cocorreo = "cocorreo.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.16,<0.12.0"]
+build-backend = "uv_build"

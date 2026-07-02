@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Datos locales (BD cifrada, adjuntos, reportes de descubrimiento)
+data/
+*.db
+*.db-journal
+*.db-wal
+discovery*.json
+
+# Docker / despliegue
+secrets/
+.env
+

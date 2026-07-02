@@ -1,0 +1,14 @@
+.venv
+__pycache__
+*.pyc
+data/
+*.db
+*.db-journal
+*.db-wal
+discovery*.json
+.git
+.gitignore
+.claude
+web/node_modules
+web/dist
+secrets
