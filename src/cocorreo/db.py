@@ -1,48 +1,66 @@
-"""Database connection for the cocorreo archive.
+"""Database connection and archive layout for the cocorreo archive.
 
-On Linux (production Raspberry Pi) uses `sqlcipher3` — a drop-in
-replacement for `sqlite3` that encrypts the whole database file with AES-256.
-
-On development macOS, `sqlcipher3-binary` doesn't publish wheels and
-compiling SQLCipher from source is prohibitively slow (macOS 12 is Tier 3 on
-Homebrew). So here we fall back to stdlib `sqlite3`, **unencrypted**.
-The passphrase is still requested and derived so the flow and
-verification behave the same way; the `db_key` simply isn't applied.
-
-This is acceptable because:
-- The development machine is protected by FileVault.
-- Attachments ARE always encrypted (handled by `crypto.encrypt_file`).
-- The real database, the one containing your emails, lives on the Pi with SQLCipher.
+Data directory layout:
+    data/
+    ├── cocorreo.db       # SQLite
+    └── attachments/      # plain files, sharded by first hex byte
 """
 
 from __future__ import annotations
 
-import sqlite3 as _stdlib_sqlite3
+import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from . import schema
-from .crypto import DerivedKeys
 
-# SQLCipher detection
-try:
-    import sqlcipher3 as _sqlcipher  # type: ignore[import-not-found]
-    HAS_SQLCIPHER = True
-except ImportError:
-    _sqlcipher = None  # type: ignore[assignment]
-    HAS_SQLCIPHER = False
+
+@dataclass(frozen=True)
+class Archive:
+    """Locates the database and attachments of a cocorreo archive on disk."""
+
+    data_dir: Path
+
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / "cocorreo.db"
+
+    @property
+    def attachments_dir(self) -> Path:
+        return self.data_dir / "attachments"
+
+
+def is_initialised(data_dir: Path) -> bool:
+    return (data_dir / "cocorreo.db").is_file()
+
+
+def initialise_archive(data_dir: Path) -> Archive:
+    """Creates the data directory layout. Fails if it already exists."""
+    data_dir = data_dir.expanduser().resolve()
+    if is_initialised(data_dir):
+        raise FileExistsError(f"{data_dir} is already initialised")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "attachments").mkdir(exist_ok=True)
+    return Archive(data_dir=data_dir)
+
+
+def open_archive(data_dir: Path) -> Archive:
+    data_dir = data_dir.expanduser().resolve()
+    if not is_initialised(data_dir):
+        raise FileNotFoundError(f"{data_dir} is not initialised (missing cocorreo.db)")
+    return Archive(data_dir=data_dir)
 
 
 class Connection:
-    """Thin wrapper over the underlying SQLite/SQLCipher connection.
+    """Thin wrapper over the underlying sqlite3 connection.
 
     Exposes the underlying connection via `.conn` for direct use
     (`.execute()`, `.executemany()`, `.commit()`, etc.) and adds utilities.
     """
 
-    def __init__(self, conn, *, encrypted: bool):
+    def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
-        self.encrypted = encrypted
 
     def __enter__(self) -> "Connection":
         return self
@@ -73,39 +91,19 @@ class Connection:
             row = self.conn.execute(
                 "SELECT value FROM meta WHERE key='schema_version'"
             ).fetchone()
-        except _stdlib_sqlite3.DatabaseError:
+        except sqlite3.DatabaseError:
             return None
-        if _sqlcipher is not None:
-            # sqlcipher3 raises its own DatabaseError class; caught broadly above too.
-            pass
         return int(row[0]) if row else None
 
 
-def connect(db_path: Path, keys: DerivedKeys) -> Connection:
-    """Opens the database; uses SQLCipher if available, otherwise stdlib sqlite3."""
+def connect(db_path: Path) -> Connection:
+    """Opens the database."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if HAS_SQLCIPHER:
-        conn = _sqlcipher.connect(str(db_path))
-        # SQLCipher 4: pass the key as raw hex to avoid its internal KDF
-        # (we've already done scrypt ourselves). Literal quotes required by SQLCipher.
-        conn.execute(f"PRAGMA key = \"x'{keys.db_key_hex}'\"")
-        conn.execute("PRAGMA cipher_compatibility = 4")
-        # Sanity check: force SQLCipher to read a page with the key
-        try:
-            conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-        except Exception as e:
-            conn.close()
-            raise RuntimeError(f"couldn't open encrypted database (wrong key?): {e}") from e
-        encrypted = True
-    else:
-        conn = _stdlib_sqlite3.connect(str(db_path))
-        encrypted = False
-
+    conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
-    return Connection(conn, encrypted=encrypted)
+    return Connection(conn)
 
 
 def init_schema(conn: Connection) -> None:

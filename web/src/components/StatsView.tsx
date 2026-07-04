@@ -180,7 +180,7 @@ function KpiGrid({ stats }: { stats: StatsResponse }) {
       <Kpi label="Unique messages" value={fmt(stats.total_messages)} hint={`${fmt(stats.total_message_sources)} occurrences (×${dedupFactor})`} />
       <Kpi label="Average size" value={fmtBytes(stats.avg_message_size)} hint={`with HTML: ${withHtmlPct}%`} />
       <Kpi label="With attachments" value={`${withAttPct}%`} hint={`${fmt(stats.messages_with_attachments)} messages`} />
-      <Kpi label="Encrypted attachments" value={fmtBytes(stats.attachments_bytes_total)} hint={`${fmt(stats.total_unique_attachments)} unique · ${fmt(stats.total_attachments)} links`} />
+      <Kpi label="Attachments" value={fmtBytes(stats.attachments_bytes_total)} hint={`${fmt(stats.total_unique_attachments)} unique · ${fmt(stats.total_attachments)} links`} />
     </div>
   );
 }

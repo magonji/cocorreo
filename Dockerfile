@@ -1,12 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# ---- builder: resolves deps with uv (wheels only on amd64/arm64; build-essential
-# stays as a safety net for any transitive dependency without a prebuilt wheel) ----
+# ---- builder: resolves deps with uv (all dependencies ship prebuilt
+# manylinux wheels for amd64/arm64, no compiler needed) ----
 FROM python:3.12-slim AS builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
@@ -20,12 +16,10 @@ RUN uv sync --frozen --no-install-project --no-dev
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-# ---- runtime: final image without the compilation toolchain ----
+# ---- runtime ----
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends libssl3 \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 1000 cocorreo
+RUN useradd --create-home --uid 1000 cocorreo
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

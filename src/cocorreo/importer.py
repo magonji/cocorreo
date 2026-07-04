@@ -1,14 +1,13 @@
-"""Importer mbox → encrypted database.
+"""Importer mbox → database.
 
 Orchestrates: for each mbox file under a Thunderbird profile, parses each
-message, deduplicates by `Message-ID`, writes to the database, encrypts
-attachments on the fly and keeps FTS5 up to date. Idempotent: re-running
+message, deduplicates by `Message-ID`, writes to the database, stores
+attachments on disk and keeps FTS5 up to date. Idempotent: re-running
 doesn't duplicate.
 """
 
 from __future__ import annotations
 
-import io
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -26,8 +25,8 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from . import crypto, db, discover, mbox, message
-from .keystore import Keystore, insecure_dev_mode
+from . import db, discover, mbox, message
+from .db import Archive
 
 COMMIT_EVERY_MESSAGES = 500
 MAX_ERROR_LOG = 500
@@ -78,12 +77,12 @@ def enumerate_candidates(profile_root: Path,
 class Importer:
     def __init__(
         self,
-        ks: Keystore,
+        archive: Archive,
         conn: db.Connection,
         profile_root: Path,
         console: Optional[Console] = None,
     ):
-        self.ks = ks
+        self.archive = archive
         self.conn = conn
         self.profile_root = profile_root
         self.console = console or Console()
@@ -148,13 +147,9 @@ class Importer:
             self.stats.attachments_dedup_hits += 1
             return row[0]
 
-        blob_path = attachment_blob_path(self.ks.attachments_dir, sha)
+        blob_path = attachment_blob_path(self.archive.attachments_dir, sha)
         blob_path.parent.mkdir(parents=True, exist_ok=True)
-        if insecure_dev_mode():
-            blob_path.write_bytes(att.content)
-        else:
-            with io.BytesIO(att.content) as src, blob_path.open("wb") as dst:
-                crypto.encrypt_file(src, dst, self.ks.keys.attach_key)
+        blob_path.write_bytes(att.content)
 
         cur = self.conn.execute(
             "INSERT INTO attachments (sha256, size_bytes, mime_type) VALUES (?, ?, ?)",

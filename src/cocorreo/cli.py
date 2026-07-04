@@ -6,7 +6,7 @@ from typing import Annotated, Optional
 import typer
 from rich.console import Console
 
-from . import db, fix_dates, importer, keystore
+from . import db, fix_dates, importer
 from .discover import discover
 
 app = typer.Typer(
@@ -23,92 +23,32 @@ def _root() -> None:
     even when only one is defined)."""
 
 
-def _read_passphrase_file(path: Path) -> str:
-    raw = path.read_text(encoding="utf-8")
-    # We allow a trailing newline (common when editing with text editors); the rest is kept as-is.
-    passphrase = raw.rstrip("\r\n")
-    if not passphrase:
-        raise keystore.KeystoreError(f"the file {path} is empty")
-    return passphrase
-
-
-def _resolve_passphrase(passphrase_file: Optional[Path], *, confirm: bool = False) -> str:
-    if keystore.insecure_dev_mode():
-        console.print(
-            "[yellow]⚠[/yellow]  COCORREO_INSECURE_DEV is set: using a fixed dev passphrase "
-            "and storing attachments unencrypted. Never use this in production."
-        )
-        return keystore.DEV_PASSPHRASE
-    if passphrase_file is not None:
-        return _read_passphrase_file(passphrase_file)
-    return keystore.prompt_passphrase(confirm=confirm)
-
-
 @app.command("init")
 def init_cmd(
     data_dir: Annotated[
         Path,
         typer.Argument(
-            help="Directory where the database, attachments and configuration will be stored. Created if it doesn't exist.",
+            help="Directory where the database and attachments will be stored. Created if it doesn't exist.",
             file_okay=False,
             dir_okay=True,
             resolve_path=True,
         ),
     ] = Path("data"),
-    passphrase_file: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--passphrase-file",
-            help="Reads the passphrase from this file (mode 600 recommended) instead of prompting via TTY.",
-            exists=True, file_okay=True, dir_okay=False, resolve_path=True,
-        ),
-    ] = None,
 ) -> None:
-    """Initialises a new cocorreo archive: asks for a passphrase and creates the empty encrypted database."""
-    if keystore.is_initialised(data_dir):
+    """Initialises a new cocorreo archive: creates the empty database."""
+    if db.is_initialised(data_dir):
         console.print(f"[red]An initialised archive already exists at[/red] {data_dir}")
         console.print("If you want to start from scratch, delete that directory manually first.")
         raise typer.Exit(code=1)
 
     console.print(f"[cyan]Initialising cocorreo archive at[/cyan] {data_dir}")
-    if passphrase_file is None and not keystore.insecure_dev_mode():
-        console.print(
-            "[dim]The passphrase will not be stored on disk. You'll have to enter it every time "
-            "you start the service. Keep it safe.[/dim]\n"
-        )
-    try:
-        passphrase = _resolve_passphrase(passphrase_file, confirm=True)
-    except keystore.KeystoreError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(code=1)
-
-    with console.status("Deriving master key (scrypt)…", spinner="dots"):
-        ks = keystore.initialise(data_dir, passphrase)
+    archive = db.initialise_archive(data_dir)
 
     with console.status("Creating database schema…", spinner="dots"):
-        with db.connect(ks.db_path, ks.keys) as conn:
+        with db.connect(archive.db_path) as conn:
             db.init_schema(conn)
 
-    console.print(f"[green]✓[/green] Configuration created at {ks.data_dir / '.cocorreo-config.json'}")
-    console.print(f"[green]✓[/green] Database initialised at {ks.db_path}")
-    if db.HAS_SQLCIPHER:
-        console.print(f"[green]✓[/green] Database encrypted with SQLCipher (key derived in memory)")
-    else:
-        console.print(
-            "[yellow]⚠[/yellow]  SQLCipher not available on this platform "
-            "→ the database uses stdlib SQLite [bold]unencrypted[/bold]."
-        )
-        if keystore.insecure_dev_mode():
-            console.print(
-                "   [dim]Attachments are stored unencrypted too (COCORREO_INSECURE_DEV). "
-                "On the Raspberry Pi (Linux), without that variable set, everything will be "
-                "encrypted automatically.[/dim]"
-            )
-        else:
-            console.print(
-                "   [dim]Attachments are still encrypted regardless. On the Raspberry Pi (Linux) "
-                "the database will be encrypted automatically.[/dim]"
-            )
+    console.print(f"[green]✓[/green] Database initialised at {archive.db_path}")
 
 
 @app.command("import")
@@ -146,33 +86,14 @@ def import_cmd(
                  "Imports all by default.",
         ),
     ] = None,
-    passphrase_file: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--passphrase-file",
-            help="Reads the passphrase from this file (mode 600 recommended) instead of prompting via TTY.",
-            exists=True, file_okay=True, dir_okay=False, resolve_path=True,
-        ),
-    ] = None,
 ) -> None:
-    """Phase 2: imports the profile's mbox files into the encrypted database (idempotent)."""
-    if not keystore.is_initialised(data_dir):
+    """Phase 2: imports the profile's mbox files into the database (idempotent)."""
+    if not db.is_initialised(data_dir):
         console.print(f"[red]{data_dir} is not initialised.[/red]")
         console.print(f"Run this first: [bold]cocorreo init {data_dir}[/bold]")
         raise typer.Exit(code=1)
 
-    try:
-        passphrase = _resolve_passphrase(passphrase_file)
-    except keystore.KeystoreError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(code=1)
-
-    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
-        try:
-            ks = keystore.unlock(data_dir, passphrase)
-        except keystore.WrongPassphrase:
-            console.print("[red]incorrect passphrase[/red]")
-            raise typer.Exit(code=1)
+    archive = db.open_archive(data_dir)
 
     account_filter: Optional[set[str]] = None
     if accounts:
@@ -187,14 +108,14 @@ def import_cmd(
 
     console.print(
         f"[cyan]Importing[/cyan] {len(candidates)} mbox files from [bold]{profile}[/bold]\n"
-        f"[cyan]Destination[/cyan]: {ks.db_path}\n"
+        f"[cyan]Destination[/cyan]: {archive.db_path}\n"
         + (f"[cyan]Limit[/cyan]:      {limit:,} messages\n" if limit else "")
         + (f"[cyan]Accounts[/cyan]:   {sorted(account_filter)}\n" if account_filter else "")
     )
 
-    with db.connect(ks.db_path, ks.keys) as conn:
+    with db.connect(archive.db_path) as conn:
         db.init_schema(conn)
-        imp = importer.Importer(ks, conn, profile, console)
+        imp = importer.Importer(archive, conn, profile, console)
         stats = imp.run(candidates, limit=limit)
 
     console.print(
@@ -226,42 +147,23 @@ def serve_cmd(
         int,
         typer.Option("--port", "-p", help="Port."),
     ] = 8000,
-    passphrase_file: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--passphrase-file",
-            help="Reads the passphrase from this file instead of prompting via TTY.",
-            exists=True, file_okay=True, dir_okay=False, resolve_path=True,
-        ),
-    ] = None,
 ) -> None:
     """Starts the local API server (FastAPI + uvicorn)."""
-    if not keystore.is_initialised(data_dir):
+    if not db.is_initialised(data_dir):
         console.print(f"[red]{data_dir} is not initialised.[/red]")
         console.print(f"Run this first: [bold]cocorreo init {data_dir}[/bold]")
         raise typer.Exit(code=1)
 
-    try:
-        passphrase = _resolve_passphrase(passphrase_file)
-    except keystore.KeystoreError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(code=1)
+    archive = db.open_archive(data_dir)
 
-    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
-        try:
-            ks = keystore.unlock(data_dir, passphrase)
-        except keystore.WrongPassphrase:
-            console.print("[red]incorrect passphrase[/red]")
-            raise typer.Exit(code=1)
-
-    console.print(f"[green]✓[/green] Archive unlocked: {ks.db_path}")
+    console.print(f"[green]✓[/green] Archive: {archive.db_path}")
     console.print(f"[cyan]Serving at[/cyan] [bold]http://{host}:{port}[/bold]")
     console.print(f"[dim]Interactive docs: http://{host}:{port}/docs[/dim]\n")
 
     from .api import create_app
     import uvicorn
 
-    app_instance = create_app(ks)
+    app_instance = create_app(archive)
     uvicorn.run(app_instance, host=host, port=port, log_level="info", access_log=False)
 
 
@@ -275,35 +177,16 @@ def fix_dates_cmd(
             file_okay=False, dir_okay=True, resolve_path=True,
         ),
     ] = Path("data"),
-    passphrase_file: Annotated[
-        Optional[Path],
-        typer.Option(
-            "--passphrase-file",
-            help="Reads the passphrase from this file instead of prompting via TTY.",
-            exists=True, file_okay=True, dir_okay=False, resolve_path=True,
-        ),
-    ] = None,
 ) -> None:
     """Fills in `date_utc` for messages with an epoch date using the first Received header."""
-    if not keystore.is_initialised(data_dir):
+    if not db.is_initialised(data_dir):
         console.print(f"[red]{data_dir} is not initialised.[/red]")
         raise typer.Exit(code=1)
 
-    try:
-        passphrase = _resolve_passphrase(passphrase_file)
-    except keystore.KeystoreError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(code=1)
-
-    with console.status("Unlocking archive (scrypt)…", spinner="dots"):
-        try:
-            ks = keystore.unlock(data_dir, passphrase)
-        except keystore.WrongPassphrase:
-            console.print("[red]incorrect passphrase[/red]")
-            raise typer.Exit(code=1)
+    archive = db.open_archive(data_dir)
 
     with console.status("Repairing dates from Received headers…", spinner="dots"):
-        with db.connect(ks.db_path, ks.keys) as conn:
+        with db.connect(archive.db_path) as conn:
             reviewed, fixed = fix_dates.fix_epoch_dates(conn)
 
     console.print(

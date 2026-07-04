@@ -22,7 +22,6 @@ Notes:
 
 from __future__ import annotations
 
-import io
 import re
 from datetime import datetime
 from email.message import EmailMessage
@@ -30,8 +29,8 @@ from email.policy import default as default_policy
 from email.utils import format_datetime
 from typing import Optional
 
-from . import crypto, db, importer
-from .keystore import Keystore, insecure_dev_mode
+from . import db, importer
+from .db import Archive
 
 _BAD_FILENAME_CHARS = '/\\:*?"<>|\r\n\t\0'
 
@@ -57,7 +56,7 @@ def _safe_filename(subject: Optional[str], message_pk: int) -> str:
     return f"{base} - #{message_pk}.eml"
 
 
-def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes, str]:
+def build_eml(conn: db.Connection, archive: Archive, message_pk: int) -> tuple[bytes, str]:
     """Reconstructs a full message as RFC 5322 bytes.
 
     Returns (eml_bytes, suggested_filename).
@@ -146,21 +145,13 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
 
     # Attachments
     for sha256, mime_type, filename, content_id, inline in att_rows:
-        blob_path = importer.attachment_blob_path(ks.attachments_dir, sha256)
+        blob_path = importer.attachment_blob_path(archive.attachments_dir, sha256)
         if not blob_path.is_file():
             continue
-        if insecure_dev_mode():
-            try:
-                data = blob_path.read_bytes()
-            except Exception:
-                continue
-        else:
-            sink = io.BytesIO()
-            try:
-                crypto.decrypt_file(blob_path, sink, ks.keys.attach_key)
-            except Exception:
-                continue
-            data = sink.getvalue()
+        try:
+            data = blob_path.read_bytes()
+        except Exception:
+            continue
         maintype, _, subtype = (mime_type or "application/octet-stream").partition("/")
         kwargs = {
             "maintype": maintype or "application",

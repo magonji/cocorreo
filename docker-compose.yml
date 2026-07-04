@@ -7,11 +7,9 @@ services:
     build: .
     restart: unless-stopped
     volumes:
-      # Already-imported data directory (encrypted DB + attachments). Copy/rsync it
+      # Already-imported data directory (DB + attachments). Copy/rsync it
       # to the server and point this here; defaults to ./data next to this file.
       - ${COCORREO_DATA_DIR:-./data}:/data
-      # Plain-text file with the passphrase, mode 600, mounted read-only.
-      - ${COCORREO_PASSPHRASE_FILE:-./secrets/passphrase.txt}:/run/secrets/cocorreo_passphrase:ro
     command:
       - serve
       - --data-dir
@@ -20,8 +18,6 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
-      - --passphrase-file
-      - /run/secrets/cocorreo_passphrase
     networks:
       - internal
 

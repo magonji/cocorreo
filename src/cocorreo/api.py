@@ -2,7 +2,7 @@
 
 Synchronous endpoints (def, not async def) — FastAPI runs them in a threadpool
 so the event loop isn't blocked. Each request opens a new SQLite connection
-(cheap with WAL); the derived keys are kept in `app.state.keystore` for the
+(cheap with WAL); the archive location is kept in `app.state.archive` for the
 whole lifetime of the process.
 """
 
@@ -17,8 +17,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
-from . import crypto, db, export, importer
-from .keystore import Keystore, insecure_dev_mode
+from . import db, export, importer
+from .db import Archive
 from .models import (
     AccountStat,
     Address,
@@ -160,15 +160,15 @@ def _build_filters(
 
 # ---------- factory ----------
 
-def create_app(keystore: Keystore) -> FastAPI:
+def create_app(archive: Archive) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        # Sanity check on startup (correct key, schema applied).
-        with db.connect(keystore.db_path, keystore.keys) as conn:
+        # Sanity check on startup (schema applied).
+        with db.connect(archive.db_path) as conn:
             ver = conn.get_schema_version()
             if ver is None:
                 raise RuntimeError(
-                    f"no schema found in database {keystore.db_path}. Run `cocorreo init` first."
+                    f"no schema found in database {archive.db_path}. Run `cocorreo init` first."
                 )
         yield
 
@@ -178,7 +178,7 @@ def create_app(keystore: Keystore) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
-    app.state.keystore = keystore
+    app.state.archive = archive
 
     app.add_middleware(
         CORSMiddleware,
@@ -191,8 +191,8 @@ def create_app(keystore: Keystore) -> FastAPI:
     # ---------- dependency: DB ----------
 
     def get_db(request: Request):
-        ks: Keystore = request.app.state.keystore
-        conn = db.connect(ks.db_path, ks.keys)
+        archive: Archive = request.app.state.archive
+        conn = db.connect(archive.db_path)
         try:
             yield conn
         finally:
@@ -209,7 +209,6 @@ def create_app(keystore: Keystore) -> FastAPI:
         return HealthResponse(
             ok=True,
             schema_version=ver,
-            encrypted=conn.encrypted,
             total_messages=total,
         )
 
@@ -424,10 +423,10 @@ def create_app(keystore: Keystore) -> FastAPI:
 
     @app.get("/messages/{message_id}/export.eml")
     def export_eml(message_id: int, request: Request):
-        ks: Keystore = request.app.state.keystore
-        with db.connect(ks.db_path, ks.keys) as conn:
+        archive: Archive = request.app.state.archive
+        with db.connect(archive.db_path) as conn:
             try:
-                data, filename = export.build_eml(conn, ks, message_id)
+                data, filename = export.build_eml(conn, archive, message_id)
             except LookupError:
                 raise HTTPException(404, "message not found")
         headers = {
@@ -442,8 +441,8 @@ def create_app(keystore: Keystore) -> FastAPI:
 
     @app.get("/messages/{message_id}/attachments/{att_id}")
     def attachment_download(message_id: int, att_id: int, request: Request):
-        ks: Keystore = request.app.state.keystore
-        with db.connect(ks.db_path, ks.keys) as conn:
+        archive: Archive = request.app.state.archive
+        with db.connect(archive.db_path) as conn:
             row = conn.execute(
                 """
                 SELECT a.sha256, a.mime_type, a.size_bytes, ma.filename, ma.inline
@@ -457,18 +456,13 @@ def create_app(keystore: Keystore) -> FastAPI:
         if not row:
             raise HTTPException(404, "attachment not found")
         sha256, mime_type, size_bytes, filename, inline = row
-        blob_path = importer.attachment_blob_path(ks.attachments_dir, sha256)
+        blob_path = importer.attachment_blob_path(archive.attachments_dir, sha256)
         if not blob_path.is_file():
             raise HTTPException(500, f"blob doesn't exist on disk: {sha256[:16]}…")
 
-        attach_key = ks.keys.attach_key
-
         def stream() -> Iterator[bytes]:
-            if insecure_dev_mode():
-                with blob_path.open("rb") as f:
-                    yield from iter(lambda: f.read(1024 * 1024), b"")
-            else:
-                yield from crypto.iter_decrypt(blob_path, attach_key)
+            with blob_path.open("rb") as f:
+                yield from iter(lambda: f.read(1024 * 1024), b"")
 
         headers: dict[str, str] = {}
         if size_bytes:

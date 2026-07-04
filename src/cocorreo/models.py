@@ -170,5 +170,4 @@ class StatsResponse(BaseModel):
 class HealthResponse(BaseModel):
     ok: bool
     schema_version: int
-    encrypted: bool
     total_messages: int

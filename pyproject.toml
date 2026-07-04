@@ -1,18 +1,16 @@
 [project]
 name = "cocorreo"
 version = "0.1.0"
-description = "Archivo personal de correo electrónico cifrado, con búsqueda local"
+description = "Archivo personal de correo electrónico, con búsqueda local"
 readme = "README.md"
 authors = [
     { name = "Mario González Jiménez", email = "magonji@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "cryptography>=48.0.0",
     "html2text>=2025.4.15",
     "rich>=15.0.0",
     "typer>=0.25.1",
-    "sqlcipher3>=0.6.2; sys_platform == 'linux'",
     "fastapi>=0.136.1",
     "uvicorn[standard]>=0.47.0",
     "bleach>=6.3.0",

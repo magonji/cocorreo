@@ -104,7 +104,6 @@ export interface FoldersResponse {
 export interface HealthResponse {
   ok: boolean;
   schema_version: number;
-  encrypted: boolean;
   total_messages: number;
 }
 
