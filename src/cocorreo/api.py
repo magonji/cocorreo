@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from . import crypto, db, export, importer
-from .keystore import Keystore
+from .keystore import Keystore, insecure_dev_mode
 from .models import (
     AccountStat,
     Address,
@@ -464,7 +464,11 @@ def create_app(keystore: Keystore) -> FastAPI:
         attach_key = ks.keys.attach_key
 
         def stream() -> Iterator[bytes]:
-            yield from crypto.iter_decrypt(blob_path, attach_key)
+            if insecure_dev_mode():
+                with blob_path.open("rb") as f:
+                    yield from iter(lambda: f.read(1024 * 1024), b"")
+            else:
+                yield from crypto.iter_decrypt(blob_path, attach_key)
 
         headers: dict[str, str] = {}
         if size_bytes:

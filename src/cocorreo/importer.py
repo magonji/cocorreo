@@ -27,7 +27,7 @@ from rich.progress import (
 )
 
 from . import crypto, db, discover, mbox, message
-from .keystore import Keystore
+from .keystore import Keystore, insecure_dev_mode
 
 COMMIT_EVERY_MESSAGES = 500
 MAX_ERROR_LOG = 500
@@ -150,8 +150,11 @@ class Importer:
 
         blob_path = attachment_blob_path(self.ks.attachments_dir, sha)
         blob_path.parent.mkdir(parents=True, exist_ok=True)
-        with io.BytesIO(att.content) as src, blob_path.open("wb") as dst:
-            crypto.encrypt_file(src, dst, self.ks.keys.attach_key)
+        if insecure_dev_mode():
+            blob_path.write_bytes(att.content)
+        else:
+            with io.BytesIO(att.content) as src, blob_path.open("wb") as dst:
+                crypto.encrypt_file(src, dst, self.ks.keys.attach_key)
 
         cur = self.conn.execute(
             "INSERT INTO attachments (sha256, size_bytes, mime_type) VALUES (?, ?, ?)",

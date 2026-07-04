@@ -31,7 +31,7 @@ from email.utils import format_datetime
 from typing import Optional
 
 from . import crypto, db, importer
-from .keystore import Keystore
+from .keystore import Keystore, insecure_dev_mode
 
 _BAD_FILENAME_CHARS = '/\\:*?"<>|\r\n\t\0'
 
@@ -149,12 +149,18 @@ def build_eml(conn: db.Connection, ks: Keystore, message_pk: int) -> tuple[bytes
         blob_path = importer.attachment_blob_path(ks.attachments_dir, sha256)
         if not blob_path.is_file():
             continue
-        sink = io.BytesIO()
-        try:
-            crypto.decrypt_file(blob_path, sink, ks.keys.attach_key)
-        except Exception:
-            continue
-        data = sink.getvalue()
+        if insecure_dev_mode():
+            try:
+                data = blob_path.read_bytes()
+            except Exception:
+                continue
+        else:
+            sink = io.BytesIO()
+            try:
+                crypto.decrypt_file(blob_path, sink, ks.keys.attach_key)
+            except Exception:
+                continue
+            data = sink.getvalue()
         maintype, _, subtype = (mime_type or "application/octet-stream").partition("/")
         kwargs = {
             "maintype": maintype or "application",

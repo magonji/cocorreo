@@ -32,6 +32,18 @@ def _read_passphrase_file(path: Path) -> str:
     return passphrase
 
 
+def _resolve_passphrase(passphrase_file: Optional[Path], *, confirm: bool = False) -> str:
+    if keystore.insecure_dev_mode():
+        console.print(
+            "[yellow]⚠[/yellow]  COCORREO_INSECURE_DEV is set: using a fixed dev passphrase "
+            "and storing attachments unencrypted. Never use this in production."
+        )
+        return keystore.DEV_PASSPHRASE
+    if passphrase_file is not None:
+        return _read_passphrase_file(passphrase_file)
+    return keystore.prompt_passphrase(confirm=confirm)
+
+
 @app.command("init")
 def init_cmd(
     data_dir: Annotated[
@@ -59,16 +71,13 @@ def init_cmd(
         raise typer.Exit(code=1)
 
     console.print(f"[cyan]Initialising cocorreo archive at[/cyan] {data_dir}")
-    if passphrase_file is None:
+    if passphrase_file is None and not keystore.insecure_dev_mode():
         console.print(
             "[dim]The passphrase will not be stored on disk. You'll have to enter it every time "
             "you start the service. Keep it safe.[/dim]\n"
         )
     try:
-        if passphrase_file is not None:
-            passphrase = _read_passphrase_file(passphrase_file)
-        else:
-            passphrase = keystore.prompt_passphrase(confirm=True)
+        passphrase = _resolve_passphrase(passphrase_file, confirm=True)
     except keystore.KeystoreError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
@@ -89,10 +98,17 @@ def init_cmd(
             "[yellow]⚠[/yellow]  SQLCipher not available on this platform "
             "→ the database uses stdlib SQLite [bold]unencrypted[/bold]."
         )
-        console.print(
-            "   [dim]Attachments are still encrypted regardless. On the Raspberry Pi (Linux) "
-            "the database will be encrypted automatically.[/dim]"
-        )
+        if keystore.insecure_dev_mode():
+            console.print(
+                "   [dim]Attachments are stored unencrypted too (COCORREO_INSECURE_DEV). "
+                "On the Raspberry Pi (Linux), without that variable set, everything will be "
+                "encrypted automatically.[/dim]"
+            )
+        else:
+            console.print(
+                "   [dim]Attachments are still encrypted regardless. On the Raspberry Pi (Linux) "
+                "the database will be encrypted automatically.[/dim]"
+            )
 
 
 @app.command("import")
@@ -146,10 +162,7 @@ def import_cmd(
         raise typer.Exit(code=1)
 
     try:
-        if passphrase_file is not None:
-            passphrase = _read_passphrase_file(passphrase_file)
-        else:
-            passphrase = keystore.prompt_passphrase(confirm=False)
+        passphrase = _resolve_passphrase(passphrase_file)
     except keystore.KeystoreError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
@@ -229,10 +242,7 @@ def serve_cmd(
         raise typer.Exit(code=1)
 
     try:
-        if passphrase_file is not None:
-            passphrase = _read_passphrase_file(passphrase_file)
-        else:
-            passphrase = keystore.prompt_passphrase(confirm=False)
+        passphrase = _resolve_passphrase(passphrase_file)
     except keystore.KeystoreError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)
@@ -280,11 +290,7 @@ def fix_dates_cmd(
         raise typer.Exit(code=1)
 
     try:
-        passphrase = (
-            _read_passphrase_file(passphrase_file)
-            if passphrase_file is not None
-            else keystore.prompt_passphrase(confirm=False)
-        )
+        passphrase = _resolve_passphrase(passphrase_file)
     except keystore.KeystoreError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1)

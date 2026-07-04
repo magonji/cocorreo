@@ -26,6 +26,19 @@ CONFIG_VERSION = 1
 VERIFY_PLAINTEXT = b"cocorreo-verify-v1"
 SALT_LEN = 16
 
+INSECURE_DEV_ENV = "COCORREO_INSECURE_DEV"
+DEV_PASSPHRASE = "cocorreo-insecure-dev-passphrase"
+
+
+def insecure_dev_mode() -> bool:
+    """True if `COCORREO_INSECURE_DEV` is set to a truthy value.
+
+    Skips the passphrase prompt (uses a fixed, well-known passphrase instead)
+    and stores attachments unencrypted on disk. Only ever meant to cut
+    friction during local development — never set this in production.
+    """
+    return os.environ.get(INSECURE_DEV_ENV, "").strip().lower() not in ("", "0", "false")
+
 
 class KeystoreError(Exception):
     pass
