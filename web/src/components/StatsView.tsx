@@ -73,7 +73,7 @@ export function StatsView() {
               <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: number) => [fmt(v), "messages"]}
+                formatter={(v) => [fmt(Number(v)), "messages"]}
               />
               <Bar dataKey="count" fill={PALETTE[0]} />
             </BarChart>
@@ -92,7 +92,7 @@ export function StatsView() {
               <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                formatter={(v: number) => [fmt(v), "messages"]}
+                formatter={(v) => [fmt(Number(v)), "messages"]}
               />
               <Line type="monotone" dataKey="count" stroke={PALETTE[1]} strokeWidth={1.5} dot={false} />
             </LineChart>
@@ -112,8 +112,8 @@ export function StatsView() {
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                  labelFormatter={(h: number) => `${h}h UTC`}
-                  formatter={(v: number) => [fmt(v), "messages"]}
+                  labelFormatter={(h) => `${Number(h)}h UTC`}
+                  formatter={(v) => [fmt(Number(v)), "messages"]}
                 />
                 <Area type="monotone" dataKey="count" stroke={PALETTE[2]} fill={PALETTE[2]} fillOpacity={0.25} />
               </AreaChart>
@@ -131,7 +131,7 @@ export function StatsView() {
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                  formatter={(v: number) => [fmt(v), "messages"]}
+                  formatter={(v) => [fmt(Number(v)), "messages"]}
                 />
                 <Bar dataKey="count" fill={PALETTE[3]} />
               </BarChart>
@@ -217,9 +217,10 @@ function AccountDonut({ accounts }: { accounts: StatsResponse["by_account"] }) {
             </Pie>
             <Tooltip
               contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-              formatter={(v: number, _: unknown, p: { payload?: { account?: string } }) =>
-                [`${fmt(v)} (${Math.round(v * 100 / total)}%)`, p?.payload?.account ?? ""]
-              }
+              formatter={(v, _, p: { payload?: { account?: string } }) => {
+                const n = Number(v);
+                return [`${fmt(n)} (${Math.round(n * 100 / total)}%)`, p?.payload?.account ?? ""];
+              }}
             />
           </PieChart>
         </ResponsiveContainer>
