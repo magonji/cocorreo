@@ -10,12 +10,14 @@ import base64
 import json
 import re
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Iterator, Optional
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import db, export, importer
 from .db import Archive
@@ -692,3 +694,23 @@ def create_app(archive: Archive) -> FastAPI:
         )
 
     return app
+
+
+def create_combined_app(archive: Archive, static_dir: Path) -> FastAPI:
+    """Single-container mode: the API lives under `/api` (same paths the
+    frontend already calls in dev via the Vite proxy) and everything else
+    serves the built SPA from `static_dir`. Used by `cocorreo serve --static-dir`.
+    """
+    inner = create_app(archive)
+
+    # Starlette doesn't propagate a mounted sub-app's lifespan, so we delegate to
+    # the inner app's lifespan here to keep its startup sanity check running.
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        async with inner.router.lifespan_context(inner):
+            yield
+
+    outer = FastAPI(title="cocorreo", lifespan=lifespan)
+    outer.mount("/api", inner)
+    outer.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    return outer

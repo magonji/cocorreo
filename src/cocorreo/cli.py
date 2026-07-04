@@ -147,6 +147,15 @@ def serve_cmd(
         int,
         typer.Option("--port", "-p", help="Port."),
     ] = 8000,
+    static_dir: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--static-dir",
+            help="Serves the built frontend (web/dist) from this directory under '/', "
+                 "with the API under '/api'. Omit to run API-only (local dev with the Vite dev server).",
+            exists=True, file_okay=False, dir_okay=True, resolve_path=True,
+        ),
+    ] = None,
 ) -> None:
     """Starts the local API server (FastAPI + uvicorn)."""
     if not db.is_initialised(data_dir):
@@ -158,12 +167,19 @@ def serve_cmd(
 
     console.print(f"[green]✓[/green] Archive: {archive.db_path}")
     console.print(f"[cyan]Serving at[/cyan] [bold]http://{host}:{port}[/bold]")
-    console.print(f"[dim]Interactive docs: http://{host}:{port}/docs[/dim]\n")
+    if static_dir is None:
+        console.print(f"[dim]Interactive docs: http://{host}:{port}/docs[/dim]\n")
+    else:
+        console.print(f"[dim]Frontend from {static_dir}, API under /api (docs: /api/docs)[/dim]\n")
 
-    from .api import create_app
     import uvicorn
 
-    app_instance = create_app(archive)
+    if static_dir is None:
+        from .api import create_app
+        app_instance = create_app(archive)
+    else:
+        from .api import create_combined_app
+        app_instance = create_combined_app(archive, static_dir)
     uvicorn.run(app_instance, host=host, port=port, log_level="info", access_log=False)
 
 

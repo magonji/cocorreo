@@ -1,36 +1,14 @@
 services:
-  backend:
+  app:
     # `image` is used by `docker compose pull` (prebuilt multi-arch image from
     # GitHub Actions/GHCR); `build` is kept so `docker compose build` still
     # works for local development without needing CI.
-    image: ${GHCR_NAMESPACE:-ghcr.io/yourusername}/cocorreo-backend:latest
+    image: ${GHCR_NAMESPACE:-ghcr.io/yourusername}/cocorreo:latest
     build: .
     restart: unless-stopped
     volumes:
       # Already-imported data directory (DB + attachments). Copy/rsync it
       # to the server and point this here; defaults to ./data next to this file.
       - ${COCORREO_DATA_DIR:-./data}:/data
-    command:
-      - serve
-      - --data-dir
-      - /data
-      - --host
-      - "0.0.0.0"
-      - --port
-      - "8000"
-    networks:
-      - internal
-
-  web:
-    image: ${GHCR_NAMESPACE:-ghcr.io/yourusername}/cocorreo-web:latest
-    build: ./web
-    restart: unless-stopped
-    depends_on:
-      - backend
     ports:
-      - "${COCORREO_WEB_PORT:-8443}:80"
-    networks:
-      - internal
-
-networks:
-  internal:
+      - "${COCORREO_WEB_PORT:-8443}:8000"
