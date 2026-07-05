@@ -99,7 +99,11 @@ class Connection:
 def connect(db_path: Path) -> Connection:
     """Opens the database."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    # check_same_thread=False: FastAPI runs sync endpoints in a threadpool, so the
+    # connection opened in the get_db dependency may be used from a different worker
+    # thread than the one that created it. Safe here because each request opens (and
+    # closes) its own connection — a connection is never shared across threads at once.
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
